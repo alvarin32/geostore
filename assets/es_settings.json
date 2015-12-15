@@ -1,0 +1,32 @@
+{
+    "index": {
+        "analysis": {
+            "analyzer": {
+                "default": {
+                    "tokenizer": "standard",
+                    "char_filter": ["umlaute"],
+                    "filter": ["lowercase", "asciifolding"]
+                },
+                "fuzzy": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "char_filter": ["umlaute"],
+                    "filter": ["lowercase", "asciifolding", "fuzzy"]
+                }
+            },
+            "filter": {
+                "fuzzy": {
+                    "type": "ngram",
+                    "min_gram": 2,
+                    "max_gram": 2
+                }
+            },
+            "char_filter": {
+                "umlaute": {
+                    "type": "mapping",
+                    "mappings": ["ä=>ae", "ö=>oe", "ü=>ue", "ß=>ss", "Ä=>AE", "Ö=>OE", "Ü=>UE"]
+                }
+            }
+        }
+    }
+}

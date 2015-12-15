@@ -1,0 +1,28 @@
+{
+    "node": {
+        "name_fuzzy": {
+            "type": "string",
+            "analyzer": "fuzzy"
+        },
+        "name": {
+            "type": "string",
+            "copy_to": "name_fuzzy"
+        },
+        "location": {
+            "type": "geo_shape"
+        }
+    },
+    "way": {
+        "name_fuzzy": {
+            "type": "string",
+            "analyzer": "fuzzy"
+        },
+        "name": {
+            "type": "string",
+            "copy_to": "name_fuzzy"
+        },
+        "location": {
+            "type": "geo_shape"
+        }
+    }
+}
