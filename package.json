@@ -1,0 +1,13 @@
+{
+    "author": "AGOPT",
+    "dependencies": {
+        "elastic": "file:./elastic",
+        "express": "*",
+        "xml2js": "*",
+        "geometry" : "file:./geometry"
+    },
+    "description": "serving osm-snapshots the graph-way",
+    "license": "WTFPL",
+    "name": "geostore",
+    "version": "0.0.1"
+}
