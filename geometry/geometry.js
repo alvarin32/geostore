@@ -105,8 +105,6 @@ var Point = {
         var point = Markable();
         var backup = [];
 
-        point.x = x;
-        point.y = y;
         point.getX = function () {
             return x;
         };

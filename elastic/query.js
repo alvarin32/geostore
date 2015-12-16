@@ -20,20 +20,16 @@ var newQuery = function () {
         return query;
     };
 
-    query.filtered = function(filter){
-        definition = {query:{filtered:{filter:filter}}};
-        return query;
-    }
-
-    query.set = function (key, value) {
-        definition[key] = value.toGeoJson ? value.toGeoJson() : value;
-        return query;
+    query.filtered = function (filter) {
+        return query.define({
+            filtered: {filter: filter}
+        });
     };
 
     query.compile = function (index) {
         var body = {};
         if (index) body.index = index;
-        if (type) body.type = type.id();
+        if (type) body.type = type.id;
         body.body = definition;
         for (var key in options) {
             body[key] = options[key];
@@ -50,5 +46,8 @@ module.exports = {
     },
     type: function (type) {
         return (newQuery()).type(type);
+    },
+    filtered: function (filter) {
+        return (newQuery()).filtered(filter);
     }
 };

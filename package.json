@@ -4,10 +4,11 @@
         "elastic": "file:./elastic",
         "express": "*",
         "xml2js": "*",
-        "geometry" : "file:./geometry"
+        "geometry": "file:./geometry"
     },
     "description": "serving osm-snapshots the graph-way",
+    "repository": "https://github.com/alvarin32/geostore.git",
     "license": "WTFPL",
     "name": "geostore",
-    "version": "0.0.1"
+    "version": "0.1.0"
 }
