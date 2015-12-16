@@ -195,21 +195,21 @@ var start = function(box, client){
         createWayGeo(nodes, onDone, path);
     };
 
-    var getElement = function (id, onDone, roundTwo) {
-      // Try to get an element from the elastic search engine
+    var getElement = function (type, id, onDone, roundTwo) {
+      // Try to get an element from its id from the elastic search engine
         var retry = function () {
             setTimeout(function () {
-                getElement(id, onDone, roundTwo);
+                getElement(type, id, onDone, roundTwo);
             }, 5000);
         };
 
-        client.get(id, function (error, element) {
+        client.get(type, id, function (error, element) {
             if (error) {
                 if (error.status == '404') {
                     if (roundTwo) return onDone();
                     client.commitBulk(function (error) {
                         if (error) return retry();
-                        getElement(id, onDone, true);
+                        getElement(type,id, onDone, true);
                     })
                 } else {
                     retry();

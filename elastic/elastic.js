@@ -122,10 +122,11 @@ var defineInterface = function(client){
         }, onDone || Log.error);
     };
 
-	_interface.get = function (atomId, onDone) {
+	_interface.get = function ( atomType, atomId, onDone) {
     console.log("client: getting.")
         client.get({
             index: INDEX,
+            type: atomType
             id: atomId,
             type: '_all',
             _source: true
