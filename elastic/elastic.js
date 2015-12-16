@@ -102,7 +102,7 @@ var defineInterface = function(client){
 
 	_interface.put = function (atom, onDone) {
         var request = {
-            index: INDEX,
+            index: INDEX_NAME,
             type: atom.type.id,
             body: atom.type.write(atom)
         };
@@ -116,17 +116,17 @@ var defineInterface = function(client){
 
     _interface.delete = function (typeId, atomId, onDone) {
         client.delete({
-            index: INDEX,
+            index: INDEX_NAME,
             id: atomId,
             type: typeId
         }, onDone || Log.error);
     };
 
 	_interface.get = function ( atomType, atomId, onDone) {
-    console.log("client: getting.")
+    console.log("client: getting element.")
         client.get({
-            index: INDEX,
-            type: atomType
+            index: INDEX_NAME,
+            type: atomType,
             id: atomId,
             type: '_all',
             _source: true
