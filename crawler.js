@@ -36,18 +36,18 @@ var genericRead = function(type){
   };
 };
 
-/* Node and Way type for ES database*/
+/* Node and Way types*/
 var nodeType = {
   id : 'node',
-  write : genericWrite,
-  read: genericRead(nodeType)
+  write : genericWrite
 };
+nodeType.read =  genericRead(nodeType);
 
 var wayType = {
   id: 'way',
   write: genericWrite,
-  read: genericRead(wayType)
 };
+wayType.read = genericRead(wayType);
 
 Elastic.registerType(nodeType);
 Elastic.registerType(wayType);

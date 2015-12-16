@@ -3,6 +3,7 @@ var Fs = require('fs');
 
 var INDEX_NAME = 'atoms';
 
+// The object of registered types
 var types = {};
 
 exports.registerType = function(type){

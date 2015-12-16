@@ -104,6 +104,9 @@ var Point = {
     create: function (x, y) {
         var point = Markable();
         var backup = [];
+
+        point.x = x;
+        point.y = y;
         point.getX = function () {
             return x;
         };
@@ -213,9 +216,9 @@ var Point = {
         };
         return point;
     },
-    fromJson: function (json) {
-        var x = json[0];
-        var y = json[1];
+    fromJson: function (coordinates) {
+        var x = coordinates[0];
+        var y = coordinates[1];
         return Point.create(x, y);
     },
     fromGeoJson: function (json) {
