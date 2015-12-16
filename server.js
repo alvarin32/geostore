@@ -18,9 +18,6 @@ var klUni = {
     bottom: 49.4355
 };
 
-/*Crawler.pullBox(klUni, function (error) {
- if (error) return console.error(error);
- });*/
 
 var test = function () {
     Elastic.createClient(function (error, client) {
@@ -41,4 +38,7 @@ var test = function () {
     })
 };
 
-test();
+Crawler.pullBox(klUni, function (error) {
+    if (error) return console.error(error);
+    test();
+});

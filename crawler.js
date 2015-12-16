@@ -6,7 +6,7 @@ var Node = require('./schema/node');
 var Way = require('./schema/way');
 
 var stepSize = 0.05;
-var BULK_SIZE = 5000;
+var BULK_SIZE = 500; //original 5000
 
 
 var start = function (box, client, onDone) {
@@ -219,19 +219,6 @@ exports.pullBox = function (bbox, onDone) {
     Elastic.createClient(function (error, client) {
         if (error) return onDone(error);
         start(bbox, client, onDone);
-    });
-
-};
-
-exports.testQuery = function (id) {
-
-    console.log('testing the database...');
-    Elastic.createClient(function (error, client) {
-        if (error) return console.log(error);
-        client.get(id, function (error, node) {
-            if (error) return console.log(error);
-            console.log(node);
-        });
     });
 
 };
