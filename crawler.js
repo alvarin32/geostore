@@ -197,12 +197,12 @@ var start = function(box, client){
     createWayGeo(nodes, onDone, path);
   };
 
-  var getElement = function (type, id, onDone, roundTwo) {
+  var getElementById = function (type, id, onDone, roundTwo) {
     // Try to get an element from its id from the elastic search engine
     // type and id must be strings
     var retry = function () {
       setTimeout(function () {
-        getElement(type, id, onDone, roundTwo);
+        getElementById(type, id, onDone, roundTwo);
       }, 5000);
     };
 
@@ -212,7 +212,7 @@ var start = function(box, client){
           if (roundTwo) return onDone();
           client.commitBulk(function (error) {
             if (error) return retry();
-            getElement(type, id, onDone, true);
+            getElementById(type, id, onDone, true);
           });
         } else {
           retry();
@@ -284,13 +284,71 @@ var start = function(box, client){
   }
 
   //loadTile();
+  var getElementsInBox = function(geoBox, onDone, roundTwo){
+    //geoObjectRectangle is a Geo.Box object
+    // Try to get an element from its id from the elastic search engine
+    // type and id must be strings
 
-  getElement('node','node_877661021',
-            function (error, atom){
-              if (error) console.error(error);
-              console.log(atom);
+    //Prepare query
+    var esQuery = {
+      "query":{
+        "geo_shape": {
+          "location": {
+            "relation": "within",
+            "shape": {
+              "type": "envelope",
+              "coordinates": [
+                [ geoBox.getLeft(), geoBox.getTop()],
+                [ geoBox.getRight(), geoBox.getBottom() ]
+              ]
             }
-  );
+          }
+
+        }
+      }
+    }
+
+    var retry = function () {
+      setTimeout(function () {
+        getElementsInBox(geoBox, onDone, roundTwo);
+      }, 5000);
+    };
+      // Call the client query
+    client.search(esQuery,  function (error, element) {
+      if (error) {
+        if (error.status == '404') {
+          if (roundTwo) return onDone();
+          client.commitBulk(function (error) {
+            if (error) return retry();
+            getElementsInBox(geoBox, onDone, true);
+          });
+        } else {
+          retry();
+        }
+        return;
+      }
+      // Parse Elastic search result and return it as array
+
+      //
+      return onDone(undefined, element);
+    })
+  }
+
+  getElementById('node','node_877661021',
+  function (error, atom){
+    if (error) console.error(error);
+    console.log(atom);
+  }
+);
+var tlPoint = Geo.Point.create(7.6973601, 49.4155379); //top left
+var brPoint = Geo.Point.create(7.70, 50.0) //bottomright
+
+var tBox = Geo.Box.create(tlPoint, brPoint);
+
+getElementsInBox(tBox, function (error, atom){
+  if (error) console.error(error);
+  console.log(atom);
+})
 }
 
 

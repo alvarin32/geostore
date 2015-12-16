@@ -105,8 +105,6 @@ var Point = {
         var point = Markable();
         var backup = [];
 
-        point.x = x;
-        point.y = y;
         point.getX = function () {
             return x;
         };
@@ -367,6 +365,9 @@ var Circle = {
 
 var Box = {
     create: function (topLeft, bottomRight) {
+      //topLeft ?is an array of [x,y]
+      //bottomRight ?is an array of [x,y]
+
         var box = Markable();
         bottomRight = bottomRight || topLeft.copy();
         if (bottomRight == topLeft) bottomRight = bottomRight.copy();

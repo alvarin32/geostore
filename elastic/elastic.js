@@ -124,7 +124,7 @@ var defineInterface = function(client){
     };
 
 	_interface.get = function ( atomType, atomId, onDone) {
-    console.log("client: getting element.")
+    console.log("ES client: getting element.")
         client.get({
             index: INDEX_NAME,
             type: atomType,
@@ -139,8 +139,12 @@ var defineInterface = function(client){
         });
     };
 
-    _interface.search = function (query, onDone, options) {
-        query = query.compile(INDEX_NAME);
+    _interface.search = function (queryBody, onDone, options) {
+        //query = query.compile(INDEX_NAME);
+        query = {
+                index: INDEX_NAME,
+                body: queryBody
+              };
         options = options || {};
         query._source = true;
         for (var key in options) {
