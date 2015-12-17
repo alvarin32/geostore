@@ -1,0 +1,10 @@
+{
+    "name": "map",
+    "version": "0.0.2",
+    "private": true,
+    "dependencies": {
+    	"commons":"file:../commons",
+    	"client":"file:../client"
+    },
+    "main":"map"
+}

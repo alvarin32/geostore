@@ -1,44 +1,92 @@
-var Crawler = require('./crawler');
+var Http = require('http');
+var Express = require('express');
 var Elastic = require('elastic');
-var Query = require('elastic/query');
-var Geo = require('geometry');
+var Mob = require('worker/mob');
+var Os = require('os');
+var Resources = require('resources');
+
+require('./bootstrap');
+
+var server, app;
+var address = process.argv[2] || 'localhost';
+var port = parseInt(process.argv[3] || 8080);
+var numberOfWorkers = parseInt(process.argv[4] || Os.cpus().length);
+var workerPort = parseInt(process.argv[5] || 65444);
 
 
-var kaiserslautern = {
-    left: 7.5303893089,
-    right: 7.9720611572,
-    top: 49.3561245199,
-    bottom: 49.520666047
-};
-
-var klUni = {
-    left: 7.7272,
-    right: 7.7824,
-    top: 49.4125,
-    bottom: 49.4355
-};
-
-
-var test = function () {
-    Elastic.createClient(function (error, client) {
+var start = function () {
+    createApp(function (error) {
         if (error) return console.error(error);
-
-        client.get('node_288553862', function (error, node) {
-            if (error) return console.error(error);
-            var circle = Geo.Circle.create(node.location, 300);
-            var nearby = {geo_shape: {location: {shape: circle.toGeoJson()}}};
-            var wasteBasket = {term: {amenity: 'waste_basket'}};
-            var query = Query.filtered({and: [nearby, wasteBasket]});
-            client.search(query, function (error, results) {
-                if (error) return console.error(error);
-                console.log(results);
-            })
-        });
-
-    })
+        startServer();
+        Resources.start();
+    });
 };
 
-Crawler.pullBox(klUni, function (error) {
-    if (error) return console.error(error);
-    test();
+var createApp = function (onDone) {
+    var url = 'https://' + address + ':' + port + '/';
+    Elastic.createClient(function (error, client) {
+        if (error) return onDone(error);
+        var mob = Mob('geostore_mob', workerPort, numberOfWorkers);
+        mob.start();
+
+        app = Express();
+        app._client = client;
+        app._mob = mob;
+        app._url = url;
+
+        setupServer(app);
+        require('./server/browser')(app);
+        app.use('/', Express.static('public'));
+        app.disable('x-powered-by');
+
+        onDone();
+    });
+};
+
+var setupServer = function (app) {
+    require('server/localizer')(app);
+    require('server/target')(app);
+    require('server/body')(app, function (request) {
+        var target = request.target;
+        return target.startsWith('api');
+    });
+    require('server/i18n').service(app);
+};
+
+
+var startServer = function () {
+    var server = Http.createServer(app);
+    server.listen(port);
+};
+
+
+var stop = function () {
+    if (server) server.close();
+    Resources.stop();
+    app._client.close();
+    app._mob.stop();
+    kill(5000);
+};
+
+
+var kill = function (timeout) {
+    setTimeout(function () {
+        process.exit(0);
+    }, timeout);
+};
+
+
+var commandLine = require('readline').createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+
+start();
+
+commandLine.on('line', function (line) {
+    if (line == 'exit') {
+        commandLine.close();
+        stop();
+    }
 });

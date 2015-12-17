@@ -6,7 +6,7 @@ var Node = require('./schema/node');
 var Way = require('./schema/way');
 
 var stepSize = 0.05;
-var BULK_SIZE = 500; //original 5000
+var BULK_SIZE = 500;
 
 
 var start = function (box, client, onDone) {
@@ -196,14 +196,26 @@ var start = function (box, client, onDone) {
         var tags = (xml.tag || []);
         tags.forEach(function (tag) {
             var key = tag.$.k.toLowerCase().replace(/:/g, '_');
-            if (key != 'id' && key != 'type') {
+            if (key != 'id' && key != 'type' && key != 'location') {
                 atom[key] = tag.$.v;
             }
         });
     };
 
 
-    loadTile();
+    if ((typeof box) == 'string' || box instanceof String) {
+        var Fs = require('fs');
+        var stream = Fs.createReadStream(box);
+        parse(stream, function (error) {
+            if (error) return onDone(error);
+            client.commitBulk(function (error) {
+                if (error) return onDone(error);
+                return onDone();
+            })
+        });
+    } else {
+        loadTile();
+    }
 
 };
 

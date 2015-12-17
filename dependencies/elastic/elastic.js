@@ -153,7 +153,7 @@ var defineInterface = function (client) {
         });
     };
 
-    _interface.forEach = function (options) {
+    _interface.forEach = function (query, options) {
 
         options = options || {};
 

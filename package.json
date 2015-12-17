@@ -1,10 +1,16 @@
 {
     "author": "AGOPT",
     "dependencies": {
-        "elastic": "file:./elastic",
+        "elastic": "file:./dependencies/elastic",
         "express": "*",
         "xml2js": "*",
-        "geometry": "file:./geometry"
+        "geometry": "file:./dependencies/geometry",
+        "map": "file:./dependencies/map",
+        "client": "file:./dependencies/client",
+        "server": "file:./dependencies/server",
+        "resources": "file:./dependencies/resources",
+        "commons": "file:./dependencies/commons",
+        "worker": "file:./dependencies/worker"
     },
     "description": "serving osm-snapshots the graph-way",
     "repository": "https://github.com/alvarin32/geostore.git",
