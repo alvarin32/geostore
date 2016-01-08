@@ -104,7 +104,6 @@ var Point = {
     create: function (x, y) {
         var point = Markable();
         var backup = [];
-
         point.getX = function () {
             return x;
         };
@@ -214,9 +213,9 @@ var Point = {
         };
         return point;
     },
-    fromJson: function (coordinates) {
-        var x = coordinates[0];
-        var y = coordinates[1];
+    fromJson: function (json) {
+        var x = json[0];
+        var y = json[1];
         return Point.create(x, y);
     },
     fromGeoJson: function (json) {
@@ -365,9 +364,6 @@ var Circle = {
 
 var Box = {
     create: function (topLeft, bottomRight) {
-      //topLeft ?is an array of [x,y]
-      //bottomRight ?is an array of [x,y]
-
         var box = Markable();
         bottomRight = bottomRight || topLeft.copy();
         if (bottomRight == topLeft) bottomRight = bottomRight.copy();

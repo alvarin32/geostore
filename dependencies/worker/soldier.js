@@ -59,7 +59,7 @@ var create = function (port) {
             clearTimeout(timeout);
             timeout = undefined;
         }
-        if (client) client.close();
+        if (context.client) context.client.close();
         if (socket) socket.destroy();
     };
 

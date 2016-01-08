@@ -1,4 +1,3 @@
-var Map = require('./map');
 var F = require('client/fiat');
 var Commons = require('commons');
 var Animator = require('client/animation');
@@ -18,7 +17,7 @@ var createLayer = function (provider) {
         provider = $provider;
         if (layer.context) {
             var cacheSize = (Math.max(layer.width, layer.height) / provider.tileSize);
-            cacheSize = Math.round(Math.pow(cacheSize, 4));
+            cacheSize = Math.round(Math.pow(cacheSize, 8));
             tileCache = createTileCache(cacheSize, provider, triggerRender);
         }
     };
@@ -279,7 +278,7 @@ var createTileCache = function (size, provider, onUpdate) {
             tile.image = new Image();
             tile.image.onload = function () {
                 tile.ready = true;
-                Animator.start({
+                Animator.tween({
                     from: 0, to: 1, onTick: function (value) {
                         tile.alpha = value;
                         onUpdate();

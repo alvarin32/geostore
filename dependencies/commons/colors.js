@@ -76,7 +76,7 @@ var random = function () {
     var red = Math.floor(Math.random() * 256);
     var blue = Math.floor(Math.random() * 256);
     var green = Math.floor(Math.random() * 256);
-    return rgbToHex(rgb(red, blue, green));
+    return rgb(red, blue, green);
 };
 
 var decToHex = function (value) {
@@ -96,7 +96,7 @@ var hexToRgb = function (hex) {
 var rgb = function (red, green, blue, alpha) {
     alpha = (alpha == undefined) ? 1 : alpha;
     return {
-        r: red, g: green, b: blue,
+        r: red || 0, g: green || 0, b: blue || 0,
         a: alpha,
         toString: function () {
             return 'rgba('
@@ -118,48 +118,23 @@ var lighten = function (hexColor, value) {
 };
 
 
-var parseRgb = function (value, defaultValue) {
-    defaultValue = defaultValue || rgb(0, 0, 0);
-    if (!value || value.length == 0) return defaultValue;
+var parseRgb = function (value) {
+    if (!value || value.length == 0) return undefined;
     if (value[0] == '#') {
         return hexToRgb(value);
     }
-    var numbers;
-    if (Commons.startsWith(value, 'rgba')) {
-        numbers = extractNumbers(value);
-        return rgb(numbers[0], numbers[1], numbers[2], numbers[3]);
-    }
     if (Commons.startsWith(value, 'rgb')) {
-        numbers = extractNumbers(value);
-        return rgb(numbers[0], numbers[1], numbers[2]);
+        var numbers = extractNumbers(value);
+        return rgb.apply(this, numbers);
     }
-    return defaultValue;
+    return undefined;
 };
 
 var extractNumbers = function (value) {
-    var numbers = [];
-    var current = '';
-    for (var i = 0; i < value.length; i++) {
-        var character = value[i];
-        if ((character >= '0' && character <= '9') ||
-            (current.length == 0 && character === '-') || character === '.') {
-            current += character;
-        } else if (current.length > 0) {
-            parseAndPushOnSuccess(current, numbers);
-            current = '';
-        }
-    }
-    if (current.length > 0) parseAndPushOnSuccess(current, numbers);
-    return numbers;
-};
-
-var parseAndPushOnSuccess = function (value, array) {
-    try {
-        array.push(parseFloat(value));
-    } catch (exception) {
-        console.log('warning: unexpected float format \'' + value + '\'');
-    }
-};
+    return value.replace(/[^0-9\-\+eE,\.]/g, ' ').split(' ').map(function (v) {
+        return parseFloat(v);
+    });
+}
 
 
 module.exports = {

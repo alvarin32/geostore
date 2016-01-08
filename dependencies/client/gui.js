@@ -333,6 +333,92 @@ exports.createAccordion = function (options) {
     return accordion;
 };
 
+exports.createWaitingIcon = function () {
+    var canvas = F.node('canvas');
+    var context, width, height;
+    var size, color, stop;
+    var factor = 0.8;
+
+    var start = function () {
+        var raw = canvas.raw();
+        var box = canvas.box();
+        raw.width = width = box.width;
+        raw.height = height = box.height;
+        context = raw.getContext('2d');
+        color = Colors.random();
+        grow();
+    };
+
+    var grow = function () {
+        Animator.tween({
+            from: 0, to: factor,
+            onTick: function (value) {
+                size = value;
+                draw();
+            },
+            onComplete: doPulse
+        });
+    };
+
+    var shrink = function () {
+        Animator.tween({
+            from: factor, to: 0,
+            onTick: function (value) {
+                size = value;
+                draw();
+            },
+            onComplete: stop
+        });
+    };
+
+    var doPulse = function () {
+        if (stop) return shrink();
+        var oldColor = color;
+        var newColor = Colors.random();
+        Animator.tween({
+            from: 0,
+            to: 1,
+            duration: 1000,
+            easing: Animator.easings.fastSlowFast,
+            onTick: function (value) {
+                size = factor - interpolateSize(value) * (1 - factor);
+                color.r = oldColor.r + (newColor.r - oldColor.r) * value;
+                color.g = oldColor.g + (newColor.g - oldColor.g) * value;
+                color.b = oldColor.b + (newColor.b - oldColor.b) * value;
+                draw();
+            },
+            onDone: function () {
+                color = newColor;
+                doPulse();
+            }
+        });
+    };
+
+    var interpolateSize = function (value) {
+        value = value * 2 - 1;
+        value = value * value;
+        return 1 - value;
+    };
+
+    var draw = function () {
+        context.clearRect(0, 0, width, height);
+        context.beginPath();
+        var _width = width * size;
+        var _height = height * size;
+        context.rect((width - _width) / 2, (height - _height) / 2, _width, _height);
+        context.fillStyle = Colors.rgbToHex(color);
+        context.fill();
+    };
+
+    canvas.stop = function (onStopped) {
+        stop = onStopped;
+        return canvas;
+    };
+
+    canvas.onAttached(start);
+    return canvas;
+};
+
 exports.createWorkingIcon = function (numberOfRows, numberOfColumns, source) {
     var canvas = F.node('canvas').style({opacity: 0});
 
@@ -344,7 +430,7 @@ exports.createWorkingIcon = function (numberOfRows, numberOfColumns, source) {
     var hide = function (onComplete) {
         if (animation) animation.cancel();
         animation = canvas.animate({opacity: 0}, {onComplete: onComplete});
-    }
+    };
 
     var width, height, context, stopRequest;
     var tiles = [];

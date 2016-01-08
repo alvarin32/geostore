@@ -1,7 +1,8 @@
 var Colors = require('commons/colors');
+var Commons = require('commons');
 
-var defaultEasing = function (value) {
-    return value * value;
+var numericInterpolation = function (from, to, progress) {
+    return from + (to - from) * progress;
 };
 
 
@@ -10,37 +11,34 @@ var defaultEasing = function (value) {
  *       from : <value or function():value>,
  *       to: <value or function():value>,
  *       onTick: <function(value, started, now, progress):void>,
- *       [interpolate: <function(from, to, progress):value>] (default=numeric interpolation)
  *       [duration: <ms>] (default=300),
- *       [delay: <ms>] (default=0),
- *       [easing: <function(progress):progress>] (default=progress*progress),
+ *       [easing: <function(progress):progress>],
+ *       [interpolate: <function(from, to, progress):value>],
  *       [onDone: <function():void>],
  *       [onComplete: <function():void>],
  *       [onCanceled: <function():void]
  *  }
  * */
-var animate = function (animated) {
-    animated.easing = animated.easing || defaultEasing;
-    animated.duration = animated.duration || 300;
-    animated.interpolate = animated.interpolate || numericInterpolation;
-    var started = null;
-    var from = null;
-    var to = null;
-    var canceled = false;
-    var isDone = false;
-    var isComplete = false;
-    var timeout = null;
+var startTween = function (animated) {
+
+    var easing = animated.easing || quadratic;
+    var interpolate = animated.interpolate || numericInterpolation;
+    var duration = animated.duration || 300;
+    var started, from, to;
+    var canceled, isDone, isComplete;
+
     var onDone = function () {
         isDone = true;
         if (animated.onDone) animated.onDone();
     };
+
     var tick = function () {
         if (!canceled) {
             var now = (new Date).getTime();
-            var progress = Math.min(1, (now - started) / animated.duration);
-            var translatedProgress = animated.easing(progress);
-            var value = animated.interpolate(from, to, translatedProgress);
-            animated.onTick(value, started, now, progress);
+            var progress = Math.min(1, (now - started) / duration);
+            var translatedProgress = easing(progress);
+            var value = interpolate(from, to, translatedProgress);
+            animated.onTick(value, started, now);
             isComplete = (progress >= 1);
             if (isComplete) {
                 if (animated.onComplete) animated.onComplete();
@@ -53,10 +51,12 @@ var animate = function (animated) {
         }
         onDone();
     };
+
     var start = function () {
+        started = (new Date).getTime();
         from = isFunction(animated.from) ? animated.from() : animated.from;
         to = isFunction(animated.to) ? animated.to() : animated.to;
-        if (from == to || from.unit && (from.value == to.value && from.unit == to.unit)) {
+        if (Commons.equals(from, to)) {
             return window.requestAnimationFrame(function () {
                 isComplete = true;
                 if (animated.onComplete) animated.onComplete();
@@ -66,10 +66,12 @@ var animate = function (animated) {
         if (from.unit != to.unit) {
             console.log('warning: animating from ' + from.unit + ' to ' + to.unit);
         }
-        started = (new Date).getTime();
         window.requestAnimationFrame(tick);
     };
-    var animation = {
+
+    start();
+
+    return {
         isDone: function () {
             return isDone;
         },
@@ -77,21 +79,9 @@ var animate = function (animated) {
             return isComplete;
         },
         cancel: function () {
-            if (!canceled && !isDone) {
-                canceled = true;
-                if (!started) {
-                    if(timeout) window.clearTimeout(timeout);
-                    window.requestAnimationFrame(tick);
-                }
-            }
+            canceled = true;
         }
     };
-    if(animated.delay){
-        timeout = setTimeout(start, animated.delay);
-    }else{
-        start();
-    }
-    return animation;
 };
 
 
@@ -104,60 +94,58 @@ var animate = function (animated) {
  * }
  * */
 var startLoop = function (loop) {
-    var started = (new Date).getTime();
-    var canceled = false;
-    var isDone = false;
-    var isComplete = false;
+
+    var started, canceled, isDone, isComplete;
+
     var tick = function () {
         if (!canceled) {
             var now = (new Date).getTime();
-            var progress = loop.duration ? Math.min(1, (now - started) / loop.duration) : 1;
-            isComplete = loop.doLoop(now, started, progress);
+            isComplete = loop.doLoop(now, started);
             if (!isComplete) {
-                window.requestAnimationFrame(tick);
-                return;
-            } else if (loop.onComplete) {
-                loop.onComplete();
+                return window.requestAnimationFrame(tick);
             }
+            if (loop.onComplete) loop.onComplete();
         } else if (loop.onCanceled) {
             loop.onCanceled();
         }
         if (loop.onDone) loop.onDone();
     };
-    window.requestAnimationFrame(tick);
+
+    var start = function () {
+        started = (new Date).getTime();
+        window.requestAnimationFrame(tick);
+    }
+
+    start();
+
     return {
         cancel: function () {
             canceled = true;
         },
         isDone: function () {
             return isDone;
+        },
+        isComplete: function () {
+            return isComplete;
         }
-    }
+    };
 };
 
 
-var animateDom = function (node, targets, options) {
+var tweenDom = function (node, targets, options) {
     options = options || {};
-    var animated;
-    if (Object.keys(targets).length > 1) {
-        animated = targetsToAnimated(node, targets);
-    } else {
-        for (var property in targets) animated = targetToAnimated(node, property, targets[property]);
-    }
-    animated.duration = options.duration || animated.duration;
+    var animated = targetsToAnimated(node, targets);
     if (options.onTick) {
-        var actualOnTick = animated.onTick;
-        animated.onTick = function (value, started, now, progress) {
-            actualOnTick(value, started, now, progress);
-            options.onTick(value, started, now, progress);
+        var userOnTick = options.onTick;
+        var systemOnTick = animated.onTick;
+        delete options.onTick;
+        animated.onTick = function () {
+            systemOnTick.apply(this, arguments);
+            userOnTick.apply(this, arguments);
         };
     }
-    animated.delay = options.delay || animated.delay;
-    animated.easing = options.easing || animated.easing;
-    animated.onDone = options.onDone || animated.onDone;
-    animated.onComplete = options.onComplete || animated.onComplete;
-    animated.onCanceled = options.onCanceled || animated.onCanceled;
-    return animate(animated);
+    for (var key in options) animated[key] = options[key];
+    return delayedTween(animated);
 };
 
 var targetsToAnimated = function (node, targets) {
@@ -182,10 +170,10 @@ var targetsToAnimated = function (node, targets) {
             }
             return 1;
         },
-        onTick: function (value, started, now, progress) {
+        onTick: function (value) {
             for (var i = 0; i < length; i++) {
                 var animated = animateds[i];
-                var interpolatedValue = animated.interpolate(animated.from, animated.to, progress);
+                var interpolatedValue = animated.interpolate(animated.from, animated.to, value);
                 animated.onTick(interpolatedValue);
             }
         }
@@ -193,26 +181,73 @@ var targetsToAnimated = function (node, targets) {
 };
 
 var targetToAnimated = function (node, property, target) {
-    var expert = createExpert(node, property);
-    var parsedTarget = expert.parse(target, expert.defaultUnit);
+    var expert = createExpert(property);
     return {
         from: function () {
-            var value = expert.get();
-            return expert.parse(value, expert.defaultUnit);
+            return expert.getCurrent(node);
         },
-        to: parsedTarget,
+        to: function () {
+            return expert.parseTarget(target);
+        },
         interpolate: function (from, to, progress) {
-            return expert.interpolate(from.value, to.value, progress);
+            return expert.interpolate(from, to, progress);
         },
         onTick: function (value) {
-            expert.set(value, parsedTarget.unit);
+            expert.setValue(node, value);
         }
     };
 };
 
+var createNumericExpert = function (property, mode, defaults) {
+    var workingPiece = {};
+    return {
+        getCurrent: function (node) {
+            var value = node[mode](property);
+            if (value == undefined) return {value: defaults.value, unit: defaults.unit};
+            return parseNumeric(property, defaults.unit);
+        },
+        parseTarget: function (target) {
+            return parseNumeric(target, defaults.unit);
+        },
+        setValue: function (node, numeric) {
+            value = numeric.unit ? (numeric.value + numeric.unit) : numeric.value;
+            node[mode](property, value);
+        },
+        interpolate: function (from, to, progress) {
+            workingPiece.value = from.value + (to.value - from.value) * progress;
+            workingPiece.unit = to.unit;
+            return workingPiece;
+        }
+    }
+};
+
+
+var createColorExpert = function (property) {
+    var workingPiece = Colors.rgb();
+    return {
+        getCurrent: function (node) {
+            var value = node.style(property);
+            return Colors.parseRgb(value) || Colors.rgb();
+        },
+        parseTarget: function (target) {
+            return Colors.parseRgb(target) || Colors.rgb();
+        },
+        setValue: function (node, color) {
+            node.style(property, color.toString());
+        },
+        interpolate: function (from, to, progress) {
+            workingPiece.r = Math.round(from.r + (to.r - from.r) * progress);
+            workingPiece.g = Math.round(from.g + (to.g - from.g) * progress);
+            workingPiece.b = Math.round(from.b + (to.b - from.b) * progress);
+            workingPiece.a = Math.round(from.a + (to.a - from.a) * progress);
+            return workingPiece;
+        }
+    }
+}
+
 var parseNumeric = function (value, defaultUnit) {
     if (isString(value)) {
-        var unitStart = value.search(/[^-.0-9]/);
+        var unitStart = value.search(/[^0-9\-\.\+]/);
         if (unitStart > 0) {
             return {
                 value: parseFloat(value.substr(0, unitStart)),
@@ -230,129 +265,53 @@ var parseNumeric = function (value, defaultUnit) {
     };
 };
 
-var parseColor = function (value) {
-    var rgb = Colors.parseRgb(value);
-    return {value: [rgb.r, rgb.g, rgb.b, rgb.a], unit: 'color'};
+
+var createPxStyleExpert = function (property) {
+    return createNumericExpert(property, 'style', {value: 0, unit: 'px'});
+};
+
+var createScaleExpert = function (property) {
+    return createNumericExpert(property, 'transform', {value: 1, unit: false});
+};
+
+var createRotateExpert = function () {
+    return createNumericExpert('rotate', 'transform', {value: 0, unit: 'deg'});
+};
+
+var createOpacityExpert = function () {
+    return createNumericExpert('opacity', 'style', {value: 1, unit: false});
 };
 
 
-var roundAndJoinColor = function (numbers) {
-    var result = '';
-    for (var i = 0; i < 3; i++) {
-        if (i > 0) {
-            result += ', ';
-        }
-        result += Math.floor(numbers[i]);
-    }
-    if (numbers.length == 4) {
-        result += ', ' + numbers[3];
-    }
-    return result;
+var expertFactories = {
+    width: createPxStyleExpert,
+    height: createPxStyleExpert,
+    bottom: createPxStyleExpert,
+    top: createPxStyleExpert,
+    left: createPxStyleExpert,
+    right: createPxStyleExpert,
+    x: createPxStyleExpert,
+    y: createPxStyleExpert,
+    backgroundColor: createColorExpert,
+    borderColor: createColorExpert,
+    color: createColorExpert,
+    scaleX: createScaleExpert,
+    scaleY: createScaleExpert,
+    rotate: createRotateExpert,
+    opacity: createOpacityExpert,
+    margin: createPxStyleExpert,
+    padding: createPxStyleExpert,
+    marginTop: createPxStyleExpert,
+    marginLeft: createPxStyleExpert,
+    marginRight: createPxStyleExpert,
+    marginBottom: createPxStyleExpert
 };
 
-var numericInterpolation = function (from, to, progress) {
-    return from + (to - from) * progress;
+var createExpert = function (property) {
+    var factory = expertFactories[property];
+    if (!factory) throw 'the property ' + property + ' can not be animated yet.';
+    return factory(property);
 };
-var colorInterpolation = function (from, to, progress) {
-    var result = [];
-    var fromLength = from.length;
-    var toLength = to.length;
-    var maxLength = Math.max(fromLength, toLength);
-    for (var i = 0; i < maxLength; i++) {
-        var fromValue = (i < fromLength) ? from[i] : 1;
-        var toValue = (i < toLength) ? to[i] : 1;
-        result[i] = numericInterpolation(fromValue, toValue, progress);
-    }
-    return result;
-};
-var createSetter = function (node, property) {
-    return function (value) {
-        node.prop(property, value);
-    };
-};
-var createGetter = function (node, property) {
-    return function () {
-        return node.prop(property);
-    };
-};
-var createStyleGetter = function (node, property, defaultValue) {
-    return function () {
-        var value = node.style(property);
-        if (isCssNull(value)) value = defaultValue;
-        return value;
-    }
-};
-var createStyleSetter = function (node, property) {
-    return function (value, unit) {
-        if (unit === 'color') {
-            node.style(property, 'rgb' + (value.length > 3 ? 'a' : '')
-                + '(' + roundAndJoinColor(value) + ')');
-        } else {
-            node.style(property, unit ? value + unit : value);
-        }
-    };
-};
-var createTransformGetter = function (node, property, defaultValue) {
-    return function () {
-        var result = node.transform(property);
-        if (result == undefined) result = defaultValue;
-        return result;
-    };
-};
-var createTransformSetter = function (node, property) {
-    return function (value, unit) {
-        node.transform(property, unit ? value + unit : value);
-    };
-};
-var factory = function (node, property, expert) {
-    expert.set = createSetter(node, property);
-    expert.get = createGetter(node, property, expert.defaultValue);
-};
-var styleFactory = function (node, property, expert) {
-    expert.set = createStyleSetter(node, property);
-    expert.get = createStyleGetter(node, property, expert.defaultValue);
-};
-var transformFactory = function (node, property, expert) {
-    expert.set = createTransformSetter(node, property);
-    expert.get = createTransformGetter(node, property, expert.defaultValue);
-};
-var black = 'rgb(0, 0, 0)';
-var experts = {
-    width: [numericInterpolation, styleFactory, 'px', 0],
-    height: [numericInterpolation, styleFactory, 'px', 0],
-    bottom: [numericInterpolation, styleFactory, 'px', 0],
-    top: [numericInterpolation, styleFactory, 'px', 0],
-    left: [numericInterpolation, styleFactory, 'px', 0],
-    right: [numericInterpolation, styleFactory, 'px', 0],
-    x: [numericInterpolation, styleFactory, 'px', 0],
-    y: [numericInterpolation, styleFactory, 'px', 0],
-    backgroundColor: [colorInterpolation, styleFactory, 'color', black],
-    borderColor: [colorInterpolation, styleFactory, 'color', black],
-    color: [colorInterpolation, styleFactory, 'color', black],
-    scaleX: [numericInterpolation, transformFactory, false, 1],
-    scaleY: [numericInterpolation, transformFactory, false, 1],
-    rotate: [numericInterpolation, transformFactory, 'deg', 0],
-    opacity: [numericInterpolation, styleFactory, false, 1],
-    margin: [numericInterpolation, styleFactory, 'px', 0],
-    padding: [numericInterpolation, styleFactory, 'px', 0],
-    marginTop: [numericInterpolation, styleFactory, 'px', 0],
-    marginLeft: [numericInterpolation, styleFactory, 'px', 0],
-    marginRight: [numericInterpolation, styleFactory, 'px', 0],
-    marginBottom: [numericInterpolation, styleFactory, 'px', 0]
-};
-var createExpert = function (node, property) {
-    var expertConfig = experts[property];
-    if (!expertConfig) throw "The property " + property + " can not be animated!";
-    var expert = {};
-    expert.interpolate = expertConfig[0];
-    expert.parse = (expert.interpolate == numericInterpolation ? parseNumeric : parseColor);
-    var factory = expertConfig[1];
-    expert.defaultUnit = expertConfig[2];
-    expert.defaultValue = expertConfig[3];
-    factory(node, property, expert);
-    return expert;
-};
-
 
 var queued = function () {
     var queue = [];
@@ -378,10 +337,116 @@ var queued = function () {
     return next;
 };
 
+var delayed = function (action, parameters, delay) {
+
+    var animation;
+
+    var timeout = setTimeout(function () {
+        timeout = null;
+        animation = action.apply(this, parameters);
+    }, delay);
+
+    return {
+        cancel: function () {
+            if (animation) animation.cancel();
+            else clearTimeout(timeout);
+        },
+        isDone: function () {
+            return animation && animation.isDone();
+        },
+        isComplete: function () {
+            return animation && animation.isComplete();
+        }
+    }
+
+};
+
+var delayedTween = function (animated) {
+    if (!animated.delay) return startTween(animated);
+    var delay = animated.delay;
+    delete animated.delay;
+    return delayed(startTween, [animated], delay);
+};
+
+var delayedLoop = function (loop) {
+    if (!loop.delay) return startLoop(loop);
+    var delay = loop.delay;
+    delete loop.delay;
+    return delayed(startLoop, [loop], delay);
+};
+
+var bounceOut = function (value) {
+    var span = 3;
+    value = (value * span) - span;
+    if (value == 0) return 1;
+    value = value * Math.PI;
+    return Math.sin(value) / value;
+};
+
+var bounceIn = function (value) {
+    var span = 3;
+    value = value * span;
+    if (value == 0) return 1;
+    value = value * Math.PI
+    return Math.sin(value) / value;
+};
+
+var bounce = function (value) {
+    var span = 3.5;
+    value = (span * 2 * value) - span;
+    if (value == 0) return 1;
+    value = value * Math.PI;
+    return Math.sin(value) / value;
+};
+
+var quadratic = function (value) {
+    return value * value;
+};
+
+var inverseQuadratic = function (value) {
+    return Math.sqrt(value);
+};
+
+var linear = function (value) {
+    return value;
+};
+
+var fastSlowFast = function (value) {
+    var factor = 0.7;
+    value = value * 2 - 1;
+    var toThree = (value * value * value);
+    value = factor * toThree + (1 - factor) * value;
+    value = (value + 1) / 2;
+    return value;
+};
+
+
+var combine = function () {
+    var chain = arguments;
+    return function (value) {
+        console.log(value);
+        for (var i = 0; i < chain.length; i++) {
+            value = chain[i](value);
+            console.log(value);
+        }
+        return value;
+    };
+};
+
 
 module.exports = {
-    start: animate,
-    loop: startLoop,
-    dom: animateDom,
-    queued: queued
+    tween: delayedTween,
+    loop: delayedLoop,
+    dom: tweenDom,
+    queued: queued,
+    easings: {
+        bounceOut: bounceOut,
+        bounceIn: bounceIn,
+        bounce: bounce,
+        quadratic: quadratic,
+        linear: linear,
+        inverseQuadratic: inverseQuadratic,
+        fastSlowFast: fastSlowFast,
+        combine: combine
+    }
 };

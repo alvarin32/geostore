@@ -179,7 +179,7 @@ var createLayer = function () {
     layer.render = function () {
         renderFrame = null;
         context.clearRect(0, 0, width, height);
-        if (!geosHidden) {
+        if(!geosHidden){
             for (var i = 0; i < geos.length; i++) {
                 var geo = geos[i];
                 artist.setColor(geo.origin.color || '#303030');
@@ -190,7 +190,7 @@ var createLayer = function () {
         if (distance != null) renderDistance();
     };
 
-    layer.setGeosHidden = function (hidden) {
+    layer.setGeosHidden = function(hidden){
         geosHidden = hidden;
         triggerRender();
         return layer;
