@@ -95,7 +95,7 @@ var hexToRgb = function (hex) {
 
 var rgb = function (red, green, blue, alpha) {
     alpha = (alpha == undefined) ? 1 : alpha;
-    return {
+    var color = {
         r: red || 0, g: green || 0, b: blue || 0,
         a: alpha,
         toString: function () {
@@ -106,6 +106,7 @@ var rgb = function (red, green, blue, alpha) {
                 + alpha + ')';
         }
     };
+    return color;
 };
 
 var lighten = function (hexColor, value) {

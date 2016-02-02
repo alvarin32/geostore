@@ -1,4 +1,4 @@
-var animator = require('./animation');
+var Animator = require('./animation');
 var F = require('./fiat');
 
 var Event = {
@@ -423,7 +423,7 @@ var registerWheel = function (router, register) {
         var delta = (event.detail < 0 || event.wheelDelta > 0) ? 1 : -1;
         if (!animation || animation.delta != delta) {
             if (animation) animation.cancel();
-            animation = animator.start({
+            animation = Animator.tween({
                 from: 0, to: 1, duration: 200, onTick: function () {
                     router.onWheel(location, delta);
                 }, onComplete: onComplete

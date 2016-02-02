@@ -166,6 +166,14 @@ var wrap = function (element) {
         var parent = element.parentNode;
         return getNode(parent);
     };
+    node.children = function () {
+        var children = [];
+        var childNodes = element.childNodes;
+        for (var i = 0; i < childNodes.length; i++) {
+            children.push(wrap(childNodes[i]));
+        }
+        return children;
+    };
     node.on = function (events, handler, useCapture) {
         useCapture = (useCapture == true);
         Commons.forEach(events.split(' '), function (event) {

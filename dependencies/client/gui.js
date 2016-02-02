@@ -333,20 +333,28 @@ exports.createAccordion = function (options) {
     return accordion;
 };
 
-exports.createWaitingIcon = function () {
+exports.createWaitingIcon = function (options) {
+    options = options || {};
+
+    var delay = options.delay || 0;
     var canvas = F.node('canvas');
     var context, width, height;
     var size, color, stop;
     var factor = 0.8;
 
+    var timeout;
     var start = function () {
-        var raw = canvas.raw();
-        var box = canvas.box();
-        raw.width = width = box.width;
-        raw.height = height = box.height;
-        context = raw.getContext('2d');
-        color = Colors.random();
-        grow();
+        if (timeout) return;
+        timeout = setTimeout(function () {
+            timeout = null;
+            var raw = canvas.raw();
+            var box = canvas.box();
+            raw.width = width = box.width;
+            raw.height = height = box.height;
+            context = raw.getContext('2d');
+            color = Colors.random();
+            grow();
+        }, delay);
     };
 
     var grow = function () {
@@ -411,6 +419,11 @@ exports.createWaitingIcon = function () {
     };
 
     canvas.stop = function (onStopped) {
+        if (timeout) {
+            clearTimeout(timeout);
+            setTimeout(onStopped, 0);
+            return canvas;
+        }
         stop = onStopped;
         return canvas;
     };

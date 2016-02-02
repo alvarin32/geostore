@@ -373,12 +373,16 @@ var getRootFolder = function () {
     return path.join('/') + '/';
 };
 
+var allowed = 'abcdefghijklmnopqrstuvwxyz0123456789';
 var createRandomId = function (length) {
-    var maxId = (1 << (length * 4)) - 1;
-    var id = Math.ceil(Math.random() * maxId).toString(16);
-    while (id.length < length) id = '0' + id;
+    var id = '';
+    for (var i = 0; i < length; i++) {
+        var index = Math.floor(Math.random() * allowed.length);
+        id += allowed[index];
+    }
     return id;
 };
+
 
 var createFuture = function () {
 

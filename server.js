@@ -26,20 +26,21 @@ var createApp = function (onDone) {
     var url = 'https://' + address + ':' + port + '/';
     Elastic.createClient(function (error, client) {
         if (error) return onDone(error);
-        var mob = Mob('geostore_mob', workerPort, numberOfWorkers);
-        mob.start();
+        var mob = Mob('geostore_mob', workerPort, numberOfWorkers, 'bootstrap');
+        mob.start(function (error) {
+            if (error) return onDone(error);
+            app = Express();
+            app._client = client;
+            app._mob = mob;
+            app._url = url;
 
-        app = Express();
-        app._client = client;
-        app._mob = mob;
-        app._url = url;
+            setupServer(app);
+            require('./server/browser')(app);
+            app.use('/', Express.static('public'));
+            app.disable('x-powered-by');
 
-        setupServer(app);
-        require('./server/browser')(app);
-        app.use('/', Express.static('public'));
-        app.disable('x-powered-by');
-
-        onDone();
+            onDone();
+        });
     });
 };
 

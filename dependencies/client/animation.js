@@ -204,7 +204,7 @@ var createNumericExpert = function (property, mode, defaults) {
         getCurrent: function (node) {
             var value = node[mode](property);
             if (value == undefined) return {value: defaults.value, unit: defaults.unit};
-            return parseNumeric(property, defaults.unit);
+            return parseNumeric(value, defaults.unit);
         },
         parseTarget: function (target) {
             return parseNumeric(target, defaults.unit);

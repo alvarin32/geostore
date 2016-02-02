@@ -58,25 +58,29 @@ exports.notIndexed = function (type) {
     return theCopy;
 };
 
-exports.create = function () {
-    return {};
-};
 exports.write = function (atom) {
     return copy(atom, {id: true, type: true});
 };
 exports.read = function (body) {
     return copy(body);
 };
+exports.inherit = function (schema, extension) {
+    var result = copy(schema);
+    for (var key in extension) {
+        result[key] = extension[key];
+    }
+    return result;
+};
 
 exports.toWire = function (atom) {
     var body = atom.type.write(atom);
-    body.type = atom.type.id;
+    body.typeId = atom.type.id;
     body.id = atom.id;
     return body;
 };
 
 exports.fromWire = function (body, typeId) {
-    var type = getType(typeId || body.type);
+    var type = getType(typeId || body.typeId);
     var atom = type.read(body);
     atom.id = body.id;
     return atom;

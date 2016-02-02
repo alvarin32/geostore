@@ -8,11 +8,11 @@ var createRequest = function (method, url) {
         onDownloadProgress;
 
     var xhr = new XMLHttpRequest();
-    xhr.open(method, url);
+    xhr.open(method, url, true);
 
     var request = {};
     request.attach = function ($data, contentType) {
-        if (arguments.length == 2) {
+        if (contentType != undefined) {
             data = $data;
             if (contentType) xhr.setRequestHeader('Content-Type', contentType);
         } else {
