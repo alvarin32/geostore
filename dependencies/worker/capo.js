@@ -6,73 +6,174 @@ var Net = require('net');
 
 exports.create = function (name, port) {
 
-    var stopMethods = [];
-    var runningJobs = [];
-    var rootPath = __dirname.replace(/node_modules(.*)/gi, '');
-    var fileName = rootPath + name + '.jobs';
+    var connections = [];
+    var rootPath = process.cwd();
+    var fileName = rootPath + '/' + name + '.jobs';
     var store = new NeDb({filename: fileName, autoload: true});
-    store.ensureIndex({fieldname: 'state'});
 
-    var server = Net.createServer(function (socket) {
+    var setupConnection = function (socket) {
 
-        var stop = function (error) {
-            if (error) console.warn('soldier-connection is shut down on capo-side due to an error: ' + error);
-            Commons.removeElement(stopMethods, stop);
-            if (currentJob) {
-                unpopJob(currentJob);
-                currentJob = null;
-            }
-            socket.close();
-        };
-
-        var currentJob;
+        var currentTask = null;
         var receive = Wire.receiver(socket);
         var send = Wire.sender(socket);
 
-        var onRequest = function () {
-            if (currentJob) {
-                onJobDone(currentJob);
-                currentJob = null;
+        var connection = {};
+
+        connection.isBusy = function () {
+            return currentTask != null;
+        };
+
+        var onStop = function (error) {
+            if (error) console.error(error);
+            if (currentTask) {
+                process.nextTick(function () {
+                    var result = {error: 'connection closed before done.'};
+                    currentTask.onDone(undefined, result);
+                });
             }
-            popJob(function (job) {
-                currentJob = job;
-                send({job: (currentJob || null)}, function (error) {
-                    if (error) return stop(error);
-                    waitForClient();
+        };
+
+        connection.stop = function (error) {
+            onStop(error);
+            send({stop: true}, function (error) {
+                if (error) console.error(error);
+                socket.end();
+            });
+        };
+
+        socket.on('error', onStop);
+        socket.on('close', onStop);
+
+        connection.delegate = function (job, onDone) {
+
+            var _onDone = function () {
+                currentTask = null;
+                onDone.apply(this, arguments);
+            };
+
+            currentTask = {job: job, onDone: _onDone};
+
+            send({job: job}, function (error) {
+                if (error) return _onDone(error);
+                receive(function (error, message) {
+                    if (error) return _onDone(error);
+                    _onDone(undefined, message);
                 });
             });
         };
 
-        var onError = function (error) {
-            onJobError(currentJob, error);
-            currentJob = null;
-            waitForClient();
-        };
+        return connection;
 
-        var waitForClient = function () {
-            receive(function (error, message) {
-                if (error) return stop(error);
-                if (message.request) {
-                    return onRequest();
-                } else if (message.error) {
-                    return onError(message.error);
-                }
-            });
-        };
-
-        waitForClient();
-    });
-
-    var start = function (onDone) {
-        //TODO: check the use of "local domain sockets"
-        server.listen(port, 'localhost', onDone);
     };
 
-    var stop = function () {
-        stopMethods.forEach(function (stopMethod) {
-            stopMethod();
+    var runJob = function (module, method, parameters) {
+        var job = {module: module, method: method, parameters: parameters, running: false};
+        findDuplicate(job, function (error, duplicate) {
+            if (error) return onError(error);
+            if (duplicate) {
+                console.warn('found active job-duplicate, won\'t execute it twice: ' + JSON.stringify(job));
+                return;
+            }
+            store.insert(job, function (error) {
+                if (error) return onError(error);
+                delegateJobs();
+            });
+        })
+    };
+
+    var findDuplicate = function (job, onDone) {
+        var clauses = [
+            {module: job.module},
+            {method: job.method},
+            {parameters: job.parameters},
+            {error: {$exists: false}}
+        ];
+        store.findOne({$and: clauses}, onDone);
+    };
+
+    var delegateJobs = function () {
+        if (isShuttingDown) return;
+        store.findOne({$and: [{error: {$exists: false}}, {running: false}]}, function (error, job) {
+            if (error) return onError(error);
+            if (!job) return;
+            job.running = true;
+            job.started = (new Date()).getTime();
+            store.update({_id: job._id}, job, function (error) {
+                if (error) return onError(error);
+                process.nextTick(delegateJobs);
+                var connection = chooseConnection();
+                connection.delegate(job, function (error, result) {
+                    if (error) return onError(error);
+                    finishJob(job, result);
+                });
+            });
         });
+    };
+
+    var finishJob = function (job, result) {
+        job.running = false;
+        job.stopped = (new Date()).getTime();
+        if (result.error) {
+            job.error = result.error;
+            store.update({_id: job._id}, job, function (error) {
+                if (error) onError(error);
+            });
+        } else {
+            store.remove({_id: job._id}, {}, function (error) {
+                if (error) onError(error);
+            });
+        }
+    };
+
+    var pointer = 0;
+    var chooseConnection = function () {
+        var numberOfConnections = connections.length;
+        for (var i = 0; i < numberOfConnections; i++) {
+            var index = (pointer + i) % numberOfConnections;
+            var connection = connections[index];
+            if (!connection.isBusy()) {
+                pointer = index;
+                return connection;
+            }
+        }
+        pointer = (pointer + 1) % numberOfConnections;
+        return connections[pointer];
+    };
+
+    var getRunningJobs = function (onDone) {
+        return store.find({running: true}, function (error, jobs) {
+            if (error) return onDone(error);
+            onDone(undefined, jobs);
+        });
+    };
+
+    var resetJobs = function (jobs, onDone) {
+        if (!jobs.length) return onDone();
+        var job = jobs.pop();
+        store.update({_id: job._id}, {$set: {running: false}}, function (error) {
+            if (error) return onDone(error);
+            resetJobs(jobs, onDone);
+        });
+    };
+
+    var start = function (onDone) {
+        getRunningJobs(function (error, runningJobs) {
+            if (error) return onDone(error);
+            resetJobs(runningJobs, function (error) {
+                if (error) return onDone(error);
+                server.listen(port, 'localhost', onDone);
+            });
+        });
+    };
+
+    var isShuttingDown = false;
+    var stop = function (onDone) {
+        isShuttingDown = true;
+        if (onDone) server.on('close', onDone);
         server.close();
+        connections.forEach(function (connection) {
+            connection.stop();
+        });
     };
 
     var onError = function (error) {
@@ -80,57 +181,22 @@ exports.create = function (name, port) {
         stop();
     };
 
+    var server = Net.createServer(function (socket) {
+        console.log('capo found soldier.');
+        var connection = setupConnection(socket);
+        connections.push(connection);
+        socket.on('close', function () {
+            console.log('capo lost soldier.');
+            Commons.removeElement(connections, connection);
+        })
+        delegateJobs();
+    });
     server.on('error', onError);
-
-    var queueJob = function (module, method, parameters) {
-        var job = {module: module, method: method, parameters: parameters};
-        store.find(job, function (error, duplicates) {
-            if (duplicates.filter(hasNoErrorSet).length) {
-                console.warn('found duplicate job entry. won\'t queue the job: ' + JSON.stringify(job));
-                return;
-            }
-            store.insert(job, function (error) {
-                if (error) onError(error);
-            });
-        });
-    };
-
-    var popJob = function (onDone) {
-        store.findOne({error: {$exists: false}, _id: {$nin: runningJobs}}, function (error, job) {
-            if (error) return onError(error);
-            if (!job) return onDone();
-            runningJobs.push(job._id);
-            onDone(job);
-        });
-    };
-
-    var unpopJob = function (job) {
-        Commons.removeElement(runningJobs, job._id);
-    };
-
-    var onJobDone = function (job) {
-        store.remove({_id: job._id}, function (error) {
-            if (error) return onError(error);
-            unpopJob(job);
-        });
-    };
-
-    var onJobError = function (job, error) {
-        store.update({_id: job._id}, {error: error}, function (error) {
-            if (error) return onError(error);
-            unpopJob(job);
-        });
-    };
 
     return {
         start: start,
         stop: stop,
-        runJob: queueJob
-    }
+        runJob: runJob
+    };
 
-};
-
-
-var hasNoErrorSet = function (job) {
-    return !('error' in job);
 };

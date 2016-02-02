@@ -5,8 +5,8 @@ var Fs = require('fs');
 
 var create = function (port) {
 
-    var socket, send, receive, timeout;
-    var rootPath = __dirname.replace(/node_modules(.*)/gi, '');
+    var socket, send, receive;
+    var rootPath = process.cwd();
     var context = {};
 
     var onError = function (error) {
@@ -15,38 +15,41 @@ var create = function (port) {
     };
 
     var doWork = function () {
-        send({request: true}, function (error) {
+        receive(function (error, message) {
             if (error) return onError(error);
-            receive(function (error, answer) {
-                if (error) return onError(error);
-                var job = answer.job;
-                if (!job) return setTimeout(doWork, 10000);
-                var module = require(rootPath + job.module);
-                var method = module[job.method];
-                if (job.parameters) {
-                    method.call(null, job.parameters, context, onJobDone);
-                } else {
-                    method.call(null, context, onJobDone);
-                }
-            });
-        })
+            if (message.stop) return stop();
+            try {
+                runJob(message.job);
+            } catch (error) {
+                onJobDone(error);
+            }
+        });
+    };
+
+    var runJob = function (job) {
+        console.log('running job: ' + job.module + '/' + job.method);
+        var module = require(rootPath + '/' + job.module);
+        var method = module[job.method];
+        if (job.parameters) {
+            method.call(null, job.parameters, context, onJobDone);
+        } else {
+            method.call(null, context, onJobDone);
+        }
     };
 
     var onJobDone = function (error) {
-        if (!error) return doWork();
-        send({error: (error.message || error)}, function (error) {
+        send({error: error}, function (error) {
             if (error) return onError(error);
             doWork();
         });
     };
 
     var start = function () {
-        var bootstrapModule = rootPath + 'bootstrap';
-        if (Fs.existsSync(bootstrapModule + '.js')) require(bootstrapModule);
         Elastic.createClient(function (error, client) {
             if (error) return onError(error);
             context.client = client;
-            socket = Net.connect(port, function () {
+            socket = Net.connect(port, function (error) {
+                if (error) return onError(error);
                 receive = Wire.receiver(socket);
                 send = Wire.sender(socket);
                 doWork();
@@ -55,12 +58,14 @@ var create = function (port) {
     };
 
     var stop = function () {
-        if (timeout) {
-            clearTimeout(timeout);
-            timeout = undefined;
-        }
         if (context.client) context.client.close();
-        if (socket) socket.destroy();
+        if (socket) {
+            try {
+                socket.end();
+            } catch (error) {
+                socket.destroy();
+            }
+        }
     };
 
     return {
@@ -71,6 +76,9 @@ var create = function (port) {
 };
 
 var port = parseInt(process.argv[2]);
+var bootstrap = process.argv[3];
+console.log('soldier\'s bootstrap: ' + process.cwd() + '/' + bootstrap);
+if (bootstrap) require(process.cwd() + '/' + bootstrap);
 var soldier = create(port);
 soldier.start();
 

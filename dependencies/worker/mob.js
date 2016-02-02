@@ -5,21 +5,22 @@ var Commons = require('commons');
 
 module.exports = function (name, port, numberOfWorkers, bootScript) {
 
-    console.log('capo starting at ' + port);
     var capo = Capo.create(name, port);
 
-    var start = function () {
-        capo.start(function () {
-            var arguments = [port.toString()];
+    var start = function (onDone) {
+        capo.start(function (error) {
+            if (error) return onDone(error);
+            var arguments = [port.toString(), bootScript];
             var soldierPath = __dirname + '/soldier.js';
             for (var i = 0; i < numberOfWorkers; i++) {
                 ChildProcess.fork(soldierPath, arguments);
             }
+            onDone();
         });
     };
 
-    var stop = function () {
-        capo.stop();
+    var stop = function (onDone) {
+        capo.stop(onDone);
     };
 
     return {

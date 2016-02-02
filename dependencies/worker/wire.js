@@ -10,21 +10,16 @@ exports.sender = function (socket) {
         var bundle = queue.shift();
         var message = JSON.stringify(bundle.message);
         var buffer = new Buffer(BYTES_PER_INT);
-        buffer.writeUIntBE(message.length, 0, BYTES_PER_INT);
+        buffer.writeUInt32LE(message.length, 0);
         var onDone = function (error) {
             writing = false;
             socket.removeListener('error', onDone);
-            if (bundle.onDone) {
-                if (error) return bundle.onDone(error);
-                bundle.onDone();
-            }
+            if (bundle.onDone) bundle.onDone(error);
+            if (!error) write();
         };
         socket.on('error', onDone);
         socket.write(buffer, function () {
-            socket.write(message, function () {
-                onDone();
-                write();
-            });
+            socket.write(message, onDone);
         });
     };
 
@@ -36,35 +31,49 @@ exports.sender = function (socket) {
 
 
 exports.receiver = function (socket) {
-    var message;
-    var length = -1;
+
+    var messages = [];
+    var lengthOfCurrentMessage = -1;
     var buffer;
     var callback;
 
-    var read = function () {
-        if (length < 0) {
-            length = buffer.readUIntBE(0, BYTES_PER_INT);
+    var readLength = function () {
+        try {
+            lengthOfCurrentMessage = buffer.readUInt32LE(0);
             buffer = buffer.slice(BYTES_PER_INT);
-            return read();
+            return true;
+        } catch (error) {
+            lengthOfCurrentMessage = -1;
+            return false;
         }
+    };
 
-        if (buffer.length < length) return;
+    var spreadMessages = function () {
+        if (!messages.length || !callback) return;
+        var message = messages.shift();
+        process.nextTick(function () {
+            callback(undefined, message);
+            process.nextTick(spreadMessages);
+        });
+    };
 
-        if (buffer.length == length) {
+    var read = function () {
+
+        if (lengthOfCurrentMessage < 0 && !readLength()) return;
+        if (buffer.length < lengthOfCurrentMessage) return;
+
+        var message;
+        if (buffer.length == lengthOfCurrentMessage) {
             message = JSON.parse(buffer.toString());
             buffer = null;
         } else {
-            message = JSON.parse(buffer.slice(0, length).toString());
-            buffer = buffer.slice(length);
+            message = JSON.parse(buffer.slice(0, lengthOfCurrentMessage).toString());
+            buffer = buffer.slice(lengthOfCurrentMessage);
+            process.nextTick(read);
         }
-
-        length = -1;
-        socket.pause();
-        var _callback = callback;
-        var _message = message;
-        callback = null;
-        message = null;
-        _callback(undefined, _message);
+        lengthOfCurrentMessage = -1;
+        messages.push(message);
+        spreadMessages();
     };
 
     socket.on('error', function (error) {
@@ -76,10 +85,8 @@ exports.receiver = function (socket) {
         read();
     });
 
-    socket.pause();
-
     return function ($callback) {
         callback = $callback;
-        socket.resume();
+        spreadMessages();
     };
 };
