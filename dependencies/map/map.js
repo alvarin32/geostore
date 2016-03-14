@@ -4,9 +4,11 @@ var Geo = require('geometry');
 var Touches = require('client/touches');
 var Tools = require('./tools');
 var Commons = require('commons');
+var Observable = require('commons/observable');
 
 var create = function () {
-    var map = {};
+
+    var map = Observable.create();
 
     map.container = F.node('div').style({
         cursor: 'pointer',
@@ -14,8 +16,6 @@ var create = function () {
     });
 
     var position, zoom;
-    var renderFrame;
-    var layers = [];
     var width, height;
     var minZoom;
 
@@ -41,8 +41,20 @@ var create = function () {
     };
 
     map.getBox = function (box) {
+        box = box || Geo.Box.empty();
         var mapSize = map.getSize();
-        return box.setBox(position.x, position.y, width / mapSize, height / mapSize);
+        return box
+            .setBox(position.x, position.y, width / mapSize, height / mapSize)
+            .transform(Tools.inverseMercator);
+    };
+
+    map.attachCanvas = function () {
+        var canvas = F.node('canvas').style({
+            position: 'absolute',
+            left: 0, top: 0,
+            width: '100%', height: '100%'
+        });
+        return canvas.appendTo(map.container);
     };
 
     var clipZoom = function (z) {
@@ -59,55 +71,6 @@ var create = function () {
         var minY = 0;
         var maxY = 1 - height / mapSize;
         return Math.max(minY, Math.min(maxY, y));
-    };
-
-    var triggerRender = function () {
-        renderFrame = renderFrame || window.requestAnimationFrame(render);
-    };
-
-    var render = function () {
-        renderFrame = null;
-        for (var i = 0; i < layers.length; i++) {
-            layers[i].render();
-        }
-    };
-
-    var update = function () {
-        var i;
-        for (i = 0; i < layers.length; i++) {
-            layers[i].update();
-        }
-        for (i = 0; i < updateListeners.length; i++) {
-            updateListeners[i]();
-        }
-        triggerRender();
-    };
-
-    var createCanvas = function () {
-        return F.node('canvas').style({
-            position: 'absolute',
-            left: 0, top: 0,
-            width: '100%', height: '100%'
-        });
-    };
-
-    map.addLayer = function (layer) {
-        layer.canvas = createCanvas();
-        layers.push(layer);
-        map.container.append(layer.canvas);
-        if (map.attached) {
-            updateLayersCanvas(layer);
-            layer.initialize(map);
-            layer.update();
-            window.requestAnimationFrame(layer.render);
-        }
-        return map;
-    };
-
-    map.removeLayer = function (layer) {
-        Commons.removeElement(layers, layer);
-        layer.canvas.remove();
-        return map;
     };
 
     var glideAnimation;
@@ -134,7 +97,7 @@ var create = function () {
                     velocity.ypms -= (elapsed * 0.005) * velocity.ypms;
                     yDone = (down != (velocity.ypms > 0)) || Math.abs(velocity.ypms) < 0.01;
                 }
-                update();
+                map.emit('update');
                 return xDone && yDone;
             }
         };
@@ -152,7 +115,7 @@ var create = function () {
                 mapSize = map.getSize();
                 position.x = clipX(targetCenter.x - (width / 2 - (pixelsToGoX * (1 - value))) / mapSize, mapSize);
                 position.y = clipY(targetCenter.y - (height / 2 - (pixelsToGoY * (1 - value))) / mapSize, mapSize);
-                update();
+                map.emit('update');
             },
             onDone: function () {
                 glideAnimation = null;
@@ -170,7 +133,7 @@ var create = function () {
             var mapSize = map.getSize();
             position.x = clipX(targetCenter.x - (width / 2) / mapSize, mapSize);
             position.y = clipY(targetCenter.y - (height / 2) / mapSize, mapSize);
-            update();
+            map.emit('update');
         }
     };
 
@@ -189,9 +152,7 @@ var create = function () {
     };
 
     map.goToGeo = function (geo, glide) {
-        geo = geo.copy().transform(Tools.mercator);
-        var box = Geo.Box.empty();
-        geo.computeBoundingBox(box);
+        var box = geo.computeBoundingBox().transform(Tools.mercator);
         goToBox(box, glide);
     };
 
@@ -216,7 +177,7 @@ var create = function () {
                 var scale = (1 / oldMapSize - 1 / newMapSize);
                 position.x = clipX(position.x + location.x * scale, newMapSize);
                 position.y = clipY(position.y + location.y * scale, newMapSize);
-                update();
+                map.emit('update');
                 return false;
             },
             onPan: function (origin, from, to) {
@@ -226,7 +187,7 @@ var create = function () {
                 var mapSize = map.getSize();
                 position.x = clipX(position.x + (deltaX / mapSize), mapSize);
                 position.y = clipY(position.y + (deltaY / mapSize), mapSize);
-                update();
+                map.emit('update');
                 return false;
             },
             onSwipe: function (origin, velocity) {
@@ -238,51 +199,19 @@ var create = function () {
             },
             onTap: function (origin, tapCount) {
                 awaitingTapOrPan = false;
-                for (var i = tapListeners.length - 1; i >= 0; i--) {
-                    if (tapListeners[i](origin, tapCount) == false) return false;
-                }
+                return map.emitReverse('tap', origin, tapCount);
             },
             onHover: function (origin) {
-                for (var i = hoverListeners.length - 1; i >= 0; i--) {
-                    if (hoverListeners[i](origin, awaitingTapOrPan) == false) return false;
-                }
+                map.emitReverse('hover', origin, awaitingTapOrPan);
             }
         }
     );
-
-    var tapListeners = [];
-    var hoverListeners = [];
-    var updateListeners = [];
-
-    map.onTap = function (listener) {
-        tapListeners.push(listener);
-    };
-
-    map.onHover = function (listener) {
-        hoverListeners.push(listener);
-    };
-
-    map.onUpdate = function (listener) {
-        updateListeners.push(listener);
-    };
 
     var synchronizeSize = function () {
         var box = map.container.box();
         width = box.width;
         height = box.height;
         minZoom = Math.sqrt(Math.max(width, height));
-        layers.forEach(function (layer) {
-            updateLayersCanvas(layer, box);
-        });
-    };
-
-    var updateLayersCanvas = function (layer, box) {
-        box = box || map.container.box();
-        var canvas = layer.canvas;
-        var raw = canvas.raw();
-        layer.width = raw.width = box.width;
-        layer.height = raw.height = box.height;
-        layer.context = layer.context || raw.getContext('2d');
     };
 
     map.container.onAttached(function () {
@@ -290,19 +219,14 @@ var create = function () {
         zoom = clipZoom(1);
         var mapSize = map.getSize();
         position = {x: clipX(0.2, mapSize), y: clipY(0.2, mapSize)};
-        layers.forEach(function (layer) {
-            layer.initialize(map);
-        });
-        map.attached = true;
-        update();
+        map.emit('update');
     });
 
     map.onResize = function () {
         synchronizeSize();
-        update();
+        map.emit('resize');
+        map.emit('update');
     };
-
-    map.triggerUpdate = update;
 
     return map;
 };

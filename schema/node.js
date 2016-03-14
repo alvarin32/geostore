@@ -1,5 +1,5 @@
 var Schema = require('elastic/schema');
-var GeoTools = require('geometry/tools');
+var Geo = require('geometry');
 
 var type = {
     id: 'node',
@@ -8,17 +8,19 @@ var type = {
     },
     write: function (node) {
         var body = Schema.write(node);
-        if (body.location) body.location = body.location.toGeoJson();
+        var location = body.location;
+        if (location && !Array.isArray(location)) body.location = location.asArray();
         return body;
     },
     read: function (body) {
         var node = Schema.read(body);
-        if (node.location) node.location = GeoTools.fromGeoJson(node.location);
+        if (node.location) node.location = Geo.Point.fromArray(node.location);
         return node;
     },
     schema: {
         name: Schema.fuzzy,
-        location: Schema.geo
+        location: Schema.geoPoint,
+        tags: Schema.nested()
     }
 };
 

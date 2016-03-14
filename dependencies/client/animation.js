@@ -184,16 +184,24 @@ var targetToAnimated = function (node, property, target) {
     var expert = createExpert(property);
     return {
         from: function () {
-            return expert.getCurrent(node);
+            if (isObject(target) && 'from' in target) {
+                var value = isFunction(target.from) ? target.from() : target.from;
+                return expert.parse(value);
+            }
+            return expert.get(node);
         },
         to: function () {
-            return expert.parseTarget(target);
+            if (isObject(target) && 'to' in target) {
+                var value = isFunction(target.to) ? target.to() : target.to;
+                return expert.parse(value);
+            }
+            return expert.parse(target);
         },
         interpolate: function (from, to, progress) {
             return expert.interpolate(from, to, progress);
         },
         onTick: function (value) {
-            expert.setValue(node, value);
+            expert.set(node, value);
         }
     };
 };
@@ -201,15 +209,15 @@ var targetToAnimated = function (node, property, target) {
 var createNumericExpert = function (property, mode, defaults) {
     var workingPiece = {};
     return {
-        getCurrent: function (node) {
+        get: function (node) {
             var value = node[mode](property);
             if (value == undefined) return {value: defaults.value, unit: defaults.unit};
             return parseNumeric(value, defaults.unit);
         },
-        parseTarget: function (target) {
-            return parseNumeric(target, defaults.unit);
+        parse: function (value) {
+            return parseNumeric(value, defaults.unit);
         },
-        setValue: function (node, numeric) {
+        set: function (node, numeric) {
             value = numeric.unit ? (numeric.value + numeric.unit) : numeric.value;
             node[mode](property, value);
         },
@@ -225,21 +233,21 @@ var createNumericExpert = function (property, mode, defaults) {
 var createColorExpert = function (property) {
     var workingPiece = Colors.rgb();
     return {
-        getCurrent: function (node) {
+        get: function (node) {
             var value = node.style(property);
             return Colors.parseRgb(value) || Colors.rgb();
         },
-        parseTarget: function (target) {
+        parse: function (target) {
             return Colors.parseRgb(target) || Colors.rgb();
         },
-        setValue: function (node, color) {
+        set: function (node, color) {
             node.style(property, color.toString());
         },
         interpolate: function (from, to, progress) {
             workingPiece.r = Math.round(from.r + (to.r - from.r) * progress);
             workingPiece.g = Math.round(from.g + (to.g - from.g) * progress);
             workingPiece.b = Math.round(from.b + (to.b - from.b) * progress);
-            workingPiece.a = Math.round(from.a + (to.a - from.a) * progress);
+            workingPiece.a = from.a + (to.a - from.a) * progress;
             return workingPiece;
         }
     }
@@ -431,6 +439,10 @@ var combine = function () {
         }
         return value;
     };
+};
+
+var isObject = function (value) {
+    return value && Object(value) === value;
 };
 
 

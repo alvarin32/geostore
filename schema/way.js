@@ -8,17 +8,24 @@ var type = {
     },
     write: function (way) {
         var body = Schema.write(way);
-        if (body.location) body.location = body.location.toGeoJson();
+        if (body.geometry) {
+            body.bounding = body.geometry.computeBoundingBox().toGeoJson();
+            body.geometry = body.geometry.toGeoJson();
+        }
         return body;
     },
     read: function (body) {
         var way = Schema.read(body);
-        if (way.location) way.location = GeoTools.fromGeoJson(way.location);
+        if (way.bounding) delete way.bounding;
+        if (way.geometry) way.geometry = GeoTools.fromGeoJson(way.geometry);
         return way;
     },
     schema: {
         name: Schema.fuzzy,
-        location: Schema.geo
+        bounding: Schema.geoShape,
+        geometry: Schema.nested({}, false),
+        tags: Schema.nested(),
+        nodeIds: Schema.reference
     }
 };
 

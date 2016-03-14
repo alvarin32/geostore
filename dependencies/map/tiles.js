@@ -5,32 +5,44 @@ var MapTools = require('./tools');
 var Geo = require('geometry');
 var Artist = require('geometry/artist');
 
-var createLayer = function (provider) {
+var createLayer = function (map, provider) {
 
-    var layer = {}, map;
+    var layer = {};
     var tileCache;
     var leaves = [];
     var leafSize = 0;
     var renderFrame;
+    var canvas, context, width, height;
+
+    var initializeContext = function () {
+        var raw = canvas.raw();
+        var box = canvas.box();
+        width = raw.width = box.width;
+        height = raw.height = box.height;
+        context = raw.getContext('2d');
+        initializeCache();
+        triggerRender();
+    };
+
+    var initializeCache = function () {
+        var cacheSize = (Math.max(width, height) / provider.tileSize);
+        cacheSize = Math.round(Math.pow(cacheSize, 8));
+        tileCache = createTileCache(cacheSize, provider, triggerRender);
+    }
 
     layer.setProvider = function ($provider) {
         provider = $provider;
-        if (layer.context) {
-            var cacheSize = (Math.max(layer.width, layer.height) / provider.tileSize);
-            cacheSize = Math.round(Math.pow(cacheSize, 8));
-            tileCache = createTileCache(cacheSize, provider, triggerRender);
+        if (context) {
+            initializeCache();
+            triggerRender();
         }
-    };
-
-    layer.initialize = function ($map) {
-        layer.setProvider(provider);
-        map = $map;
     };
 
     layer.update = function () {
         tileCache.onUpdateStart();
         doUpdate();
         tileCache.onUpdateStop();
+        triggerRender();
     };
 
     var doUpdate = function () {
@@ -44,8 +56,8 @@ var createLayer = function (provider) {
         var top = map.getY() * mapSize;
         var x = Math.floor(left / leafSize);
         var y = Math.floor(top / leafSize);
-        var leavesX = Math.ceil(layer.width / leafSize) + 1;
-        var leavesY = Math.ceil(layer.height / leafSize) + 1;
+        var leavesX = Math.ceil(width / leafSize) + 1;
+        var leavesY = Math.ceil(height / leafSize) + 1;
         leavesX = Math.min(leavesX, numberOfTiles - x);
         leavesY = Math.min(leavesY, numberOfTiles - y);
         prepareLeaves(leavesX * leavesY);
@@ -81,25 +93,35 @@ var createLayer = function (provider) {
 
 
     var triggerRender = function () {
-        renderFrame = renderFrame || window.requestAnimationFrame(layer.render);
+        if (!context) return;
+        renderFrame = renderFrame || window.requestAnimationFrame(doRender);
     };
 
-    layer.render = function () {
+    var doRender = function () {
         renderFrame = null;
-        layer.context.clearRect(0, 0, layer.width, layer.height);
+        context.clearRect(0, 0, width, height);
         tileCache.onDrawStart();
         for (var i = 0; i < leaves.length; i++) {
             var leaf = leaves[i];
             var tile = leaf.tile;
-            tile.draw(layer.context, leaf.left, leaf.top, leafSize, false);
+            tile.draw(context, leaf.left, leaf.top, leafSize, false);
         }
         tileCache.onDrawStop();
     };
 
-
     layer.clearCache = function () {
         tileCache.clear();
+        triggerRender();
     };
+
+    canvas = map.attachCanvas();
+    canvas.onAttached(function () {
+        initializeContext();
+        layer.update();
+        map.on('resize', initializeContext)
+        map.on('update', layer.update);
+    });
+
 
     return layer;
 };
@@ -314,51 +336,43 @@ var idToString = function (x, y, z) {
 
 var MIN_SCALE = (1 / (1 << 16)) / 256;
 var createImage = function (options) {
+
     options = options || {};
+
     var geo;
-
-    var setGeo = function (geometry, transformed) {
-        if (!geometry) {
-            transformed = true;
-            geometry = Geo.Box.create(Geo.Point.create(0, 0), Geo.Point.create(1, 1));
-        }
-        if (!transformed) geometry = geometry.copy().transform(MapTools.mercator);
-        geo = geometry;
-    };
-
-    setGeo(options.geo, options['transformed']);
     var offset = options.offset || 1; //[cm]
     var provider = options['provider'] || providers.MAPQUEST;
-    var container = F.node('div').style('position', 'relative');
+
+    var container = F.node('div').style({position: 'relative', width: cm(3), height: cm(3), display: 'inline-block'});
     var canvasStyle = {position: 'absolute', left: 0, top: 0, height: '100%', width: '100%'};
-    var tileCanvas = F.node('canvas').style(canvasStyle);
-    var geoCanvas = F.node('canvas').style(canvasStyle);
-    container.append(tileCanvas, geoCanvas);
+    var tileCanvas = F.node('canvas').style(canvasStyle).appendTo(container);
+    var geoCanvas = F.node('canvas').style(canvasStyle).appendTo(container);
+
     var width, height, tileContext, geoContext;
     var artist;
+
+    container.setGeo = function (geometry, transformed) {
+        geometry = geometry || Geo.Box.create(Geo.Point.create(-180, 90), Geo.Point.create(180, -90));
+        if (!transformed) geometry = geometry.copy().transform(MapTools.mercator);
+        geo = geometry;
+        if (artist) render();
+    };
 
     var render = function () {
         tileContext.clearRect(0, 0, width, height);
         geoContext.clearRect(0, 0, width, height);
-        var box = Geo.Box.empty();
-        geo.computeBoundingBox(box);
+        var box = geo.computeBoundingBox(box);
         var scaleX = box.getWidth() / (width - cmToPx(offset));
         var scaleY = box.getHeight() / (height - cmToPx(offset));
         var excerpt = {};
-        excerpt.scale = Math.max(scaleX, scaleY);   // [%/px]
-        if (excerpt.scale <= 0) excerpt.scale = MIN_SCALE;
+        excerpt.scale = Math.max(MIN_SCALE, Math.max(scaleX, scaleY));   // [%/px]
         excerpt.width = width * excerpt.scale;
         excerpt.height = height * excerpt.scale;
-        excerpt.size = Math.min(excerpt.width, excerpt.height);
         excerpt.x = box.getLeft() - ((excerpt.width - box.getWidth()) / 2);
         excerpt.y = box.getTop() - ((excerpt.height - box.getHeight()) / 2);
         boundExcerpt(excerpt);
         renderTiles(excerpt);
-        if (!options.hideGeo) renderGeo(excerpt);
-    };
-
-    var boundValue = function (value, min, max) {
-        return Math.max(min, Math.min(max, value));
+        renderGeo(excerpt);
     };
 
     var boundExcerpt = function (excerpt) {
@@ -366,21 +380,27 @@ var createImage = function (options) {
         excerpt.y = boundValue(excerpt.y, 0, 1);
         excerpt.width = Math.min(1 - excerpt.x, excerpt.width);
         excerpt.height = Math.min(1 - excerpt.y, excerpt.height);
-        excerpt.size = Math.min(1 - excerpt.x, Math.min(1 - excerpt.y, excerpt.size));
-        excerpt.scale = excerpt.size / Math.min(width, height);
+        var scaleX = excerpt.width / width;
+        var scaleY = excerpt.height / height;
+        excerpt.scale = Math.max(scaleX, scaleY);
+    };
+
+    var boundValue = function (value, min, max) {
+        return Math.max(min, Math.min(max, value));
     };
 
     var renderTiles = function (excerpt) {
-        var numberOfShownTiles = 1;
-        var zoom = Math.floor(Math.log(numberOfShownTiles / excerpt.size) / Math.log(2));
+        var maxSize = Math.max(excerpt.width, excerpt.height);
+        var zoom = Math.floor(Math.log(1 / maxSize) / Math.log(2));
         zoom = Math.min(provider.max, Math.max(provider.min, zoom));
         var tilesAtZoom = Math.pow(2, zoom);
         var tileSizeAtZoom = 1 / tilesAtZoom;
-        numberOfShownTiles = Math.ceil(excerpt.size / tileSizeAtZoom) + 1;
+        var numberOfTilesX = Math.ceil(excerpt.width / tileSizeAtZoom) + 1;
+        var numberOfTilesY = Math.ceil(excerpt.height / tileSizeAtZoom) + 1;
         var startX = Math.floor(excerpt.x / tileSizeAtZoom);
         var startY = Math.floor(excerpt.y / tileSizeAtZoom);
-        for (var i = 0; i < numberOfShownTiles; i++) {
-            for (var j = 0; j < numberOfShownTiles; j++) {
+        for (var i = 0; i < numberOfTilesX; i++) {
+            for (var j = 0; j < numberOfTilesY; j++) {
                 var id = {x: startX + i, y: startY + j, z: zoom};
                 if (id.x < tilesAtZoom && id.y < tilesAtZoom) {
                     loadAndRenderTile(id, excerpt, tileSizeAtZoom);
@@ -398,15 +418,16 @@ var createImage = function (options) {
         geo.restore();
     };
 
-    var loadAndRenderTile = function (id, excerpt, tileSize) {
+    var tileSize = provider.tileSize;
+    var loadAndRenderTile = function (id, excerpt, imageSize) {
         var image = new Image();
         var _myGeo = geo;
         image.onload = function () {
             if (_myGeo != geo) return;
-            var left = (id.x * tileSize - excerpt.x) / excerpt.scale;
-            var top = (id.y * tileSize - excerpt.y) / excerpt.scale;
-            var size = tileSize / excerpt.scale;
-            tileContext.drawImage(image, 0, 0, 256, 256, left, top, size, size);
+            var left = (id.x * imageSize - excerpt.x) / excerpt.scale;
+            var top = (id.y * imageSize - excerpt.y) / excerpt.scale;
+            var size = imageSize / excerpt.scale;
+            tileContext.drawImage(image, 0, 0, tileSize, tileSize, left, top, size, size);
         };
         image.src = provider.getUrl(id.x, id.y, id.z);
     };
@@ -414,7 +435,7 @@ var createImage = function (options) {
     container.onAttached(function () {
         tileContext = prepareCanvas(tileCanvas);
         geoContext = prepareCanvas(geoCanvas);
-        artist = Artist(geoContext, options.artist);
+        artist = Artist(geoContext);
         render();
     });
 
@@ -424,11 +445,6 @@ var createImage = function (options) {
         width = raw.width = box.width;
         height = raw.height = box.height;
         return raw.getContext('2d');
-    };
-
-    container.update = function (geometry, transformed) {
-        setGeo(geometry, transformed);
-        if (artist)render();
     };
 
     return container;

@@ -50,7 +50,9 @@ var colors = {
     between: '#909090',
     bright: '#F3F3F3',
     brighter: '#FBFBFB',
-    signal: '#ff972a'
+    signal: '#ff972a',
+    error: '#be615d',
+    success: '#3c876b'
 };
 
 var fonts = {

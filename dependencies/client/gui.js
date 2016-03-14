@@ -9,11 +9,6 @@ exports.createIcon = function (src, options) {
     var imageSize = options['imageSize'] || '60%';
     var circleSize = options['circleSize'] || '80%';
     var color = options.color || Colors.bright;
-    var center = {
-        position: 'absolute',
-        left: 0, right: 0, top: 0, bottom: 0,
-        margin: 'auto'
-    };
 
     var container = F.node('div').style({
         position: 'relative',
@@ -49,7 +44,16 @@ exports.createIcon = function (src, options) {
     return container.append(circle, image);
 };
 
-exports.createGeoIcon = function (size) {
+exports.createGeoIcon = function (size, options) {
+
+    options = options || {};
+    options.offset = options.offset || size * 0.3;
+    options.artist = options.artist || {
+            strong: size * 4,
+            light: size * 1.5,
+            dotSize: size * 10,
+            dark: options.color || colors.dark
+        };
 
     var container = F.node('div').style({
         borderRadius: '50%',
@@ -58,26 +62,62 @@ exports.createGeoIcon = function (size) {
         height: cm(size, true)
     });
 
-    var options = {
-        offset: size * 0.3,
-        artist: {
-            strong: size * 2,
-            light: size * 0.75,
-            dotSize: size * 5
-        }
-    };
-
     var image = Tiles.image(options).style({
         width: '100%', height: '100%',
         opacity: 0.6
     }).appendTo(container);
 
-    container.update = function (geo) {
-        options.hideGeo = (geo == undefined);
+    container.update = function (geo, hide) {
+        options.hideGeo = (geo == undefined) || hide;
         image.style('opacity', geo ? 1 : 0.6);
         container.style('border', geo ? 'none' : cm(size * 0.03) + ' dashed ' + colors.dark);
         image.update(geo);
         return container;
+    };
+
+
+    return container;
+};
+
+
+exports.createProgressBar = function (size, color) {
+
+    size = size || 1;
+    color = color || colors.signal;
+
+    var container = F.node('div').style({
+        width: cm(size * 5), height: cm(size), display: 'inline-block',
+        position: 'relative', border: colors.dark + ' solid ' + cm(size * 0.02)
+    });
+
+    var fill = F.node('div')
+        .style({position: 'absolute', left: 0, top: 0, height: '100%', width: 0})
+        .style({backgroundColor: colors.signal})
+        .appendTo(container);
+
+    var label = F.node('div')
+        .style(center)
+        .style({width: cm(2), height: cm(size * 0.3), lineHeight: cm(size * 0.3), fontSize: cm(size * 0.3)})
+        .text('0%')
+        .appendTo(container);
+
+    var percent, isUpdating;
+    var updateFill = function () {
+        if (isUpdating) return;
+        isUpdating = true;
+        var $percent = percent;
+        fill.animate({width: $percent}, {
+            onDone: function () {
+                isUpdating = false;
+                if ($percent != percent) updateFill();
+            }
+        });
+    };
+
+    container.onProgress = function (progress) {
+        percent = Math.round(progress * 100) + '%';
+        label.text(percent);
+        updateFill();
     };
 
     return container;
@@ -157,13 +197,10 @@ exports.createSlider = function (options) {
         marginTop: 'auto', marginBottom: 'auto'
     });
 
-    var bar = F.node('div').style({
+    var bar = F.node('div').style(center).style({
         backgroundColor: colors.dark,
         width: 'calc(100% - ' + cm(size) + ')',
-        position: 'absolute',
-        height: cm(size * 0.1),
-        margin: 'auto',
-        left: 0, top: 0, right: 0, bottom: 0
+        height: cm(size * 0.1)
     });
 
     var listeners = [];
@@ -623,4 +660,35 @@ exports.createWorkingIcon = function (numberOfRows, numberOfColumns, source) {
     canvas.onAttached(start);
     canvas.stop = stop;
     return canvas;
+};
+
+
+exports.renderDate = function (date, size) {
+    size = size || 1;
+    var container = F.node('div').style({display: 'inline-block'});
+    var icon = exports.createIcon(
+        '/images/date.svg',
+        {color: colors.bright, imageSize: '50%'})
+        .style({
+            width: cm(size), height: cm(size),
+            verticalAlign: 'middle'
+        });
+    var dayString = F.node('span').text(date.toLocaleDateString());
+    var timeString = F.node('span').text(date.toLocaleTimeString());
+    var label = F.node('div')
+        .style({
+            textAlign: 'right',
+            display: 'inline-block',
+            fontSize: cm(size * 0.3), lineHeight: cm(size * 0.33),
+            verticalAlign: 'middle'
+        })
+        .append(dayString, F.node('br'), timeString);
+    return container.append(icon, label);
+};
+
+
+var center = {
+    position: 'absolute',
+    left: 0, right: 0, top: 0, bottom: 0,
+    margin: 'auto'
 };

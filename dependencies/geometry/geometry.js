@@ -140,8 +140,10 @@ var Point = {
             return point;
         };
         point.restore = function () {
-            y = backup.pop();
-            x = backup.pop();
+            if (backup.length) {
+                y = backup.pop();
+                x = backup.pop();
+            }
             return point;
         };
         point.translate = function (deltaX, deltaY) {
@@ -169,26 +171,26 @@ var Point = {
             return point;
         };
         point.transform = function (transformation) {
-            transformation.transformPoint(point);
+            transformation(point);
             return point;
         };
         point.transformAndMark = function (transformation, mark) {
             if (!point.isMarkedAs(mark)) {
                 point.markAs(mark);
-                transformation.transformPoint(point);
+                transformation(point);
             }
             return point;
         };
         point.getType = function () {
             return Type.POINT;
         };
-        point.toJson = function () {
+        point.asArray = function () {
             return [x, y];
         };
         point.toGeoJson = function () {
             return {
                 type: "Point",
-                coordinates: point.toJson()
+                coordinates: [x, y]
             };
         };
         point.copy = function () {
@@ -199,123 +201,138 @@ var Point = {
         };
 
         //
+        point.contains = function ($x, $y) {
+            return x == $x && y == $y;
+        };
+        point.containsPoint = function (other) {
+            return point.contains(other.getX(), other.getY());
+        };
         point.distanceTo = function (otherX, otherY) {
             return distance(x, y, otherX, otherY);
         };
         point.distanceToPoint = function (other) {
             return distance(x, y, other.getX(), other.getY());
         };
-        point.containsPoint = function (other) {
-            return x == other.getX() && y == other.getY();
-        };
         point.computeBoundingBox = function (box) {
+            box = box || Box.empty();
             return box.set(point, point);
         };
         return point;
     },
-    fromJson: function (json) {
-        var x = json[0];
-        var y = json[1];
+    fromArray: function (array) {
+        var x = array[0];
+        var y = array[1];
         return Point.create(x, y);
     },
     fromGeoJson: function (json) {
         var coordinates = json.coordinates;
-        return Point.fromJson(coordinates);
+        return Point.fromArray(coordinates);
     }
 };
 
 var Circle = {
-    create: function (center, radius) {
+    create: function (center, satellite) {
         var circle = Markable();
-        var backup = [];
+        var radius;
+
+        var updateRadius = function () {
+            var deltaX = center.getX() - satellite.getX();
+            var deltaY = center.getY() - satellite.getY();
+            radius = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            return circle;
+        }
+        updateRadius();
+
         circle.getCenter = function () {
             return center;
+        };
+        circle.getSatellite = function () {
+            return satellite;
         };
         circle.getRadius = function () {
             return radius;
         };
-        circle.setRadius = function ($radius) {
-            radius = $radius;
-            return circle;
-        };
         circle.scale = function (scaleX, scaleY) {
             center.scale(scaleX, scaleY);
-            radius *= Math.max(scaleX, scaleY);
-            return circle;
+            satellite.scale(scaleX, scaleY);
+            return updateRadius();
         };
         circle.scaleAndMark = function (scaleX, scaleY, mark) {
             if (!circle.isMarkedAs(mark)) {
                 circle.markAs(mark);
                 center.scaleAndMark(scaleX, scaleY, mark);
-                radius *= Math.max(scaleX, scaleY);
+                satellite.scaleAndMark(scaleX, scaleY, mark);
+                updateRadius();
             }
             return circle;
         };
         circle.translate = function (deltaX, deltaY) {
             center.translate(deltaX, deltaY);
+            satellite.translate(deltaX, deltaY);
             return circle;
         };
         circle.translateAndMark = function (deltaX, deltaY, mark) {
             if (!circle.isMarkedAs(mark)) {
                 circle.markAs(mark);
                 center.translateAndMark(deltaX, deltaY, mark);
+                satellite.translateAndMark(deltaX, deltaY, mark);
             }
             return circle;
         };
         circle.transform = function (transformation) {
-            transformation.transformPoint(center);
-            radius = transformation.transformDistance(radius);
-            return circle;
+            transformation(center);
+            transformation(satellite);
+            return updateRadius();
         };
         circle.transformAndMark = function (transformation, mark) {
             if (!circle.isMarkedAs(mark)) {
                 circle.markAs(mark);
                 center.transformAndMark(transformation, mark);
-                radius = transformation.transformDistance(radius);
+                satellite.transformAndMark(transformation, mark);
+                updateRadius();
             }
             return circle;
         };
         circle.backup = function () {
             center.backup();
-            backup.push(radius);
+            satellite.backup();
             return circle;
         };
         circle.restore = function () {
             center.restore();
-            radius = backup.pop();
-            return circle;
+            satellite.restore();
+            return updateRadius();
         };
         circle.getType = function () {
             return Type.CIRCLE;
         };
-        circle.toJson = function () {
-            return [center.toJson(), radius];
-        };
         circle.toGeoJson = function () {
+            var radiusInMeter = distanceInMeter(
+                center.getY(), center.getX(), satellite.getY(), satellite.getX());
             return {
                 type: "Circle",
-                coordinates: center.toJson(),
-                radius: radius
+                coordinates: center.asArray(),
+                radius: radiusInMeter
             };
         };
         circle.copy = function () {
-            return Circle.create(center.copy(), radius);
+            return Circle.create(center.copy(), satellite.copy());
         };
 
         //
-        circle.distanceTo = function (x, y, pixelsToCenter) {
+        circle.distanceTo = function (x, y, distanceToCenter) {
             var centerX = center.getX();
             var centerY = center.getY();
             var deltaX = x - centerX;
             var deltaY = y - centerY;
-            if (pixelsToCenter === undefined) {
-                pixelsToCenter = euclidean(centerX, centerY, x, y);
+            if (distanceToCenter === undefined) {
+                distanceToCenter = euclidean(centerX, centerY, x, y);
             }
-            var ratio = radius / pixelsToCenter;
+            var ratio = radius / distanceToCenter;
             return distance(x, y,
                 centerX + ratio * deltaX,
                 centerY + ratio * deltaY,
-                pixelsToCenter - radius);
+                distanceToCenter - radius);
         };
         circle.distanceToPoint = function (point) {
             var x = point.getX();
@@ -330,8 +347,8 @@ var Circle = {
                 distance.pixels);
         };
         circle.contains = function (x, y) {
-            var pixelsToCenter = euclidean(center.getX(), center.getY(), x, y);
-            return pixelsToCenter <= radius;
+            var distanceToCenter = euclidean(center.getX(), center.getY(), x, y);
+            return distanceToCenter <= radius;
         };
         circle.containsPoint = function (point) {
             return circle.contains(point.getX(), point.getY());
@@ -341,6 +358,7 @@ var Circle = {
             return distanceToCenter.pixels <= radius;
         };
         circle.computeBoundingBox = function (box) {
+            box = box || Box.empty();
             var diameter = 2 * radius;
             return box.setBox(
                 center.getX() - radius,
@@ -350,186 +368,193 @@ var Circle = {
 
         return circle;
     },
-    fromJson: function (json) {
-        var center = Point.fromJson(json[0]);
-        var radius = json[1];
-        return Circle.create(center, radius);
-    },
     fromGeoJson: function (json) {
         var radius = json.radius;
-        var center = Point.fromJson(json.coordinates);
-        return Circle.create(center, radius);
+        var center = Point.fromArray(json.coordinates);
+        var satellite = shiftLocationEastByMeters(center.copy(), radius);
+        return Circle.create(center, satellite);
     }
 };
 
 var Box = {
-    create: function (topLeft, bottomRight) {
+    create: function (start, stop) {
         var box = Markable();
-        bottomRight = bottomRight || topLeft.copy();
-        if (bottomRight == topLeft) bottomRight = bottomRight.copy();
-        box.getLeft = topLeft.getX;
-        box.getTop = topLeft.getY;
-        box.getRight = bottomRight.getX;
-        box.getBottom = bottomRight.getY;
-        var assureTopLeftMin = function () {
-            var x1 = topLeft.getX();
-            var x2 = bottomRight.getX();
-            var y1 = topLeft.getY();
-            var y2 = bottomRight.getY();
-            topLeft.setMin(x2, y2);
-            bottomRight.setMax(x1, y1);
+        stop = stop || start.copy();
+        if (stop == start) throw 'a box must not be spanned between a single point.';
+
+        box.getLeft = function () {
+            return Math.min(start.getX(), stop.getX());
         };
-        assureTopLeftMin();
+        box.getTop = function () {
+            return Math.min(start.getY(), stop.getY());
+        };
+        box.getRight = function () {
+            return Math.max(start.getX(), stop.getX());
+        };
+        box.getBottom = function () {
+            return Math.max(start.getY(), stop.getY());
+        };
+
         box.toString = function () {
-            return '[ ' + topLeft.toString() + ' / ' + bottomRight.toString() + ' ]';
+            return '[ ' + start.toString() + ' / ' + stop.toString() + ' ]';
         };
-        box.getTopLeft = function () {
-            return topLeft;
+        box.getStart = function () {
+            return start;
         };
-        box.getBottomRight = function () {
-            return bottomRight;
+        box.getStop = function () {
+            return stop;
         };
         box.getWidth = function () {
-            return box.getRight() - box.getLeft();
+            return Math.abs(start.getX() - stop.getX());
         };
         box.getHeight = function () {
-            return box.getBottom() - box.getTop();
+            return Math.abs(start.getY() - stop.getY());
         };
-        box.set = function (_topLeft, _bottomRight) {
-            topLeft.set(_topLeft.getX(), _topLeft.getY());
-            bottomRight.set(_bottomRight.getX(), _bottomRight.getY());
+        box.set = function ($start, $stop) {
+            start.set($start.getX(), $start.getY());
+            stop.set($stop.getX(), $stop.getY());
             return box;
         };
         box.stretchToContain = function (point) {
             var x = point.getX();
             var y = point.getY();
-            topLeft.setMin(x, y);
-            bottomRight.setMax(x, y);
+            var startX = start.getX();
+            var startY = start.getY();
+            var stopX = stop.getX();
+            var stopY = stop.getY();
+            var left = Math.min(x, Math.min(startX, stopX));
+            var right = Math.max(x, Math.max(startX, stopX));
+            var top = Math.min(y, Math.min(startY, stopY));
+            var bottom = Math.max(y, Math.max(startY, stopY));
+            start.set(left, top);
+            stop.set(right, bottom);
             return box;
         };
         box.setBox = function (left, top, width, height) {
-            topLeft.set(left, top);
-            bottomRight.set(left + width, top + height);
+            start.set(left, top);
+            stop.set(left + width, top + height);
             return box;
         };
         box.translate = function (deltaX, deltaY) {
-            topLeft.translate(deltaX, deltaY);
-            bottomRight.translate(deltaX, deltaY);
+            start.translate(deltaX, deltaY);
+            stop.translate(deltaX, deltaY);
             return box;
         };
         box.translateAndMark = function (deltaX, deltaY, mark) {
             if (!box.isMarkedAs(mark)) {
                 box.markAs(mark);
-                topLeft.translateAndMark(deltaX, deltaY, mark);
-                bottomRight.translateAndMark(deltaX, deltaY, mark);
+                start.translateAndMark(deltaX, deltaY, mark);
+                stop.translateAndMark(deltaX, deltaY, mark);
             }
             return box;
         };
         box.scale = function (scaleX, scaleY) {
-            topLeft.scale(scaleX, scaleY);
-            bottomRight.scale(scaleX, scaleY);
+            start.scale(scaleX, scaleY);
+            stop.scale(scaleX, scaleY);
             return box;
         };
         box.scaleAndMark = function (scaleX, scaleY, mark) {
             if (!box.isMarkedAs(mark)) {
                 box.markAs(mark);
-                topLeft.scaleAndMark(scaleX, scaleY, mark);
-                bottomRight.scaleAndMark(scaleX, scaleY, mark);
+                start.scaleAndMark(scaleX, scaleY, mark);
+                stop.scaleAndMark(scaleX, scaleY, mark);
             }
             return box;
         };
         box.transform = function (transformation) {
-            topLeft.transform(transformation);
-            bottomRight.transform(transformation);
-            assureTopLeftMin();
+            start.transform(transformation);
+            stop.transform(transformation);
             return box;
         };
         box.transformAndMark = function (transformation, mark) {
             if (!box.isMarkedAs(mark)) {
                 box.markAs(mark);
-                topLeft.transformAndMark(transformation, mark);
-                bottomRight.transformAndMark(transformation, mark);
-                assureTopLeftMin();
+                start.transformAndMark(transformation, mark);
+                stop.transformAndMark(transformation, mark);
             }
             return box;
         };
         box.backup = function () {
-            topLeft.backup();
-            bottomRight.backup();
+            start.backup();
+            stop.backup();
             return box;
         };
         box.restore = function () {
-            topLeft.restore();
-            bottomRight.restore();
+            start.restore();
+            stop.restore();
             return box;
         };
         box.getType = function () {
             return Type.BOX;
         };
-        box.toJson = function () {
-            return [
-                topLeft.toJson(),
-                bottomRight.toJson()
-            ];
-        };
         box.toGeoJson = function () {
+            var topLeft = [box.getLeft(), box.getTop()];
+            var bottomRight = [box.getRight(), box.getBottom()];
             return {
                 type: "Envelope",
-                coordinates: box.toJson()
+                coordinates: [topLeft, bottomRight]
             };
         };
         box.copy = function () {
-            return Box.create(topLeft.copy(), bottomRight.copy());
+            return Box.create(start.copy(), stop.copy());
         };
 
         //
-        var getRow = function (y) {
-            if (y < box.getTop()) {
+        var getRow = function (y, top, bottom) {
+            if (y < top) {
                 return 0;
             }
-            if (y < box.getBottom()) {
+            if (y < bottom) {
                 return 1;
             }
             return 2;
         };
-        var getColumn = function (x) {
-            if (x < box.getLeft()) {
+        var getColumn = function (x, left, right) {
+            if (x < left) {
                 return 0;
             }
-            if (x < box.getRight()) {
+            if (x < right) {
                 return 1;
             }
             return 2;
         };
-        box.getSector = function (x, y) {
-            var column = getColumn(x);
-            var row = getRow(y);
+        box.getSector = function (x, y, left, top, bottom, right) {
+            var column = getColumn(x, left, right);
+            var row = getRow(y, top, bottom);
             return row * 3 + column;
         };
         box.getPointsSector = function (point) {
-            return box.getSector(point.getX(), point.getY());
+            var left = box.getLeft();
+            var top = box.getTop();
+            var bottom = box.getBottom();
+            var right = box.getRight();
+            return box.getSector(point.getX(), point.getY(), left, top, bottom, right);
         };
         box.distanceTo = function (x, y) {
-            var sector = box.getSector(x, y);
+            var top = box.getTop();
+            var left = box.getLeft();
+            var bottom = box.getBottom();
+            var right = box.getRight();
+            var sector = box.getSector(x, y, left, top, bottom, right);
             switch (sector) {
                 case 0:
-                    return distance(x, y, box.getLeft(), box.getTop());
+                    return distance(x, y, left, top);
                 case 1:
-                    return distance(x, y, x, box.getTop(), box.getTop() - y);
+                    return distance(x, y, x, top, top - y);
                 case 2:
-                    return distance(x, y, box.getRight(), box.getTop());
+                    return distance(x, y, right, top);
                 case 3:
-                    return distance(x, y, box.getLeft(), y, box.getLeft() - x);
+                    return distance(x, y, left, y, left - x);
                 case 4:
                     return innerDistance(x, y);
                 case 5:
-                    return distance(x, y, box.getRight(), y, x - box.getRight());
+                    return distance(x, y, right, y, x - right);
                 case 6:
-                    return distance(x, y, box.getLeft(), box.getBottom());
+                    return distance(x, y, left, bottom);
                 case 7:
-                    return distance(x, y, x, box.getBottom(), y - box.getBottom());
+                    return distance(x, y, x, bottom, y - bottom);
                 case 8:
-                    return distance(x, y, box.getRight(), box.getBottom());
+                    return distance(x, y, right, bottom);
             }
         };
         var innerDistance = function (x, y) {
@@ -569,7 +594,11 @@ var Box = {
             return box.distanceTo(point.getX(), point.getY());
         };
         box.contains = function (x, y) {
-            return box.getSector(x, y) == 4;
+            var left = box.getLeft();
+            var top = box.getTop();
+            var right = box.getRight();
+            var bottom = box.getBottom();
+            return box.getSector(x, y, left, top, bottom, right) == 4;
         };
         box.containsPoint = function (point) {
             return box.contains(point.getX(), point.getY());
@@ -579,7 +608,8 @@ var Box = {
                 && intersects(box.getTop(), box.getBottom(), other.getTop(), other.getBottom());
         };
         box.computeBoundingBox = function (bb) {
-            return bb.set(topLeft, bottomRight);
+            bb = bb || Box.empty();
+            return bb.set(start, stop);
         };
 
         return box;
@@ -588,13 +618,11 @@ var Box = {
         var zero = Point.create(0, 0);
         return Box.create(zero.copy(), zero.copy());
     },
-    fromJson: function (json) {
-        var topLeft = Point.fromJson(json[0]);
-        var bottomRight = Point.fromJson(json[1]);
-        return Box.create(topLeft, bottomRight);
-    },
     fromGeoJson: function (json) {
-        return Box.fromJson(json.coordinates);
+        var array = json.coordinates;
+        var topLeft = Point.fromArray(array[0]);
+        var bottomRight = Point.fromArray(array[1]);
+        return Box.create(topLeft, bottomRight);
     }
 };
 
@@ -651,13 +679,10 @@ var Line = {
         line.getType = function () {
             return Type.LINE;
         };
-        line.toJson = function () {
-            return [start.toJson(), stop.toJson()];
-        };
         line.toGeoJson = function () {
             return {
                 type: "MultiPoint",
-                coordinates: line.toJson()
+                coordinates: [start.asArray(), stop.asArray()]
             };
         };
         line.copy = function () {
@@ -667,6 +692,19 @@ var Line = {
 
 
         //
+        line.contains = function (x, y) {
+            if (start.contains(x, y)) return true;
+            if (stop.contains(x, y)) return true;
+            var startX = start.getX();
+            var stopX = stop.getX();
+            if (!within(x, start.getX(), stop.getX())) return false;
+            var startY = start.getY();
+            var stopY = stop.getY();
+            return (y - startY) / (x - startX) == (stopY - startY) / (stopX - startX);
+        };
+        line.containsPoint = function (point) {
+            return line.contains(point.getX(), point.getY());
+        };
         line.distanceTo = function (x, y) {
             return distancePointLine(x, y,
                 start.getX(), start.getY(), stop.getX(), stop.getY());
@@ -766,6 +804,7 @@ var Line = {
                 || intersectsVerticalLine(right, top, bottom);
         };
         line.computeBoundingBox = function (box) {
+            box = box || Box.empty();
             box.set(start, start);
             box.stretchToContain(stop);
             return box;
@@ -773,13 +812,13 @@ var Line = {
 
         return line;
     },
-    fromJson: function (json) {
-        var start = Point.fromJson(json[0]);
-        var stop = Point.fromJson(json[1]);
+    fromArray: function (array) {
+        var start = Point.fromArray(array[0]);
+        var stop = Point.fromArray(array[1]);
         return Line.create(start, stop);
     },
     fromGeoJson: function (json) {
-        return Line.fromJson(json.coordinates);
+        return Line.fromArray(json.coordinates);
     }
 };
 
@@ -805,21 +844,17 @@ var Path = {
             return lines[index];
         };
         path.getStart = function () {
-            if (lines.length) {
-                return lines[0].getStart();
-            }
-            return null;
+            return lines.length && lines[0].getStart();
         };
         path.moveTo = function (point) {
             if (lines.length > 0) throw "started path must not be moved no more";
             pointer = point;
             return path;
         };
-        path.lineTo = function (point, useRaw) {
+        path.lineTo = function (point) {
             if (pointer == null) {
                 return path.moveTo(point);
             }
-            point = useRaw ? point : (path.getEqualPoint(point) || point);
             if (pointer == point) {
                 return path;
             }
@@ -830,15 +865,10 @@ var Path = {
         };
         path.close = function () {
             var start = path.getStart();
-            return path.lineTo(start, true);
+            return path.lineTo(start);
         };
         path.isClosed = function () {
-            if (lines.length < 2) {
-                return false;
-            }
-            var start = path.getStart();
-            var stop = path.getStop();
-            return start == stop;
+            return path.getStart() == path.getStop();
         };
         path.getPointer = function () {
             return pointer;
@@ -849,11 +879,11 @@ var Path = {
             return path;
         };
         path.scaleAndMark = function (scaleX, scaleY, mark) {
-            if (!path.isMarkedAs(mark) && lines.length) {
+            if (!path.isMarkedAs(mark)) {
                 path.markAs(mark);
                 path.forEach(function (point) {
                     point.scaleAndMark(scaleX, scaleY, mark);
-                });
+                }, true);
             }
             return path;
         };
@@ -867,7 +897,7 @@ var Path = {
                 path.markAs(mark);
                 path.forEach(function (point) {
                     point.translateAndMark(deltaX, deltaY, mark);
-                });
+                }, true);
             }
             return path;
         };
@@ -880,7 +910,7 @@ var Path = {
                 path.markAs(mark);
                 path.forEach(function (point) {
                     point.transformAndMark(transformation, mark);
-                });
+                }, true);
             }
             return path;
         };
@@ -905,17 +935,17 @@ var Path = {
         path.getType = function () {
             return Type.PATH;
         };
-        path.toJson = function () {
+        path.asArray = function () {
             var json = [];
             path.forEach(function (point) {
-                json.push(point.toJson());
-            }, false, true);
+                json.push(point.asArray());
+            });
             return json;
         };
         path.toGeoJson = function () {
             return {
                 type: "LineString",
-                coordinates: path.toJson()
+                coordinates: path.asArray()
             };
         };
         path.copy = function () {
@@ -1004,9 +1034,8 @@ var Path = {
             });
         };
         path.computeBoundingBox = function (box) {
-            if (lines.length == 0) {
-                throw 'empty path has no bounding box';
-            }
+            box = box || Box.empty();
+            if (lines.length == 0) throw 'empty path has no bounding box';
             var start = path.getStart();
             box.set(start, start);
             for (var i = 0; i < lines.length; i++) {
@@ -1015,52 +1044,32 @@ var Path = {
             }
             return box;
         };
-        path.forEach = function (handler, reverse, excludePointer) {
+        path.forEach = function (handler, includePointer) {
             var numberOfLines = lines.length;
             if (!numberOfLines) return;
-            var i;
-            if (!excludePointer && pointer) handler(pointer);
-            if (reverse) {
-                handler(lines[numberOfLines - 1].getStop());
-                for (i = numberOfLines - 1; i >= 0; i--) {
-                    handler(lines[i].getStart());
-                }
-            } else {
-                handler(lines[0].getStart());
-                for (i = 0; i < numberOfLines; i++) {
-                    handler(lines[i].getStop());
-                }
+            handler(lines[0].getStart());
+            for (var i = 0; i < numberOfLines; i++) {
+                handler(lines[i].getStop());
             }
-        };
-        path.getEqualPoint = function (point) {
-            if (pointer && pointer.equals(point)) return pointer;
-            if (!lines.length) return;
-            var start = lines[0].getStart();
-            if (start.equals(point)) return start;
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i];
-                var stop = line.getStop();
-                if (stop.equals(point)) return stop;
-            }
+            if (includePointer) handler(pointer);
         };
 
         return path;
     },
-    fromJson: function (json) {
+    fromArray: function (array) {
         var path = Path.create();
-        if (json.length) {
-            var first = Point.fromJson(json[0]);
-            path.moveTo(first);
-            for (var i = 1; i < json.length; i++) {
-                var point = Point.fromJson(json[i]);
-                path.lineTo(point);
-            }
-            if (path.getStart().equals(path.getStop())) path.close();
+        if (array.length < 2) throw 'invalid path!';
+        for (var i = 0; i < array.length - 1; i++) {
+            var point = Point.fromArray(array[i]);
+            path.lineTo(point);
         }
+        var lastOne = Point.fromArray(array[i]);
+        if (array.length > 2 && path.getStart().equals(lastOne)) path.close();
+        else path.lineTo(lastOne);
         return path;
     },
     fromGeoJson: function (json) {
-        return Path.fromJson(json.coordinates);
+        return Path.fromArray(json.coordinates);
     }
 };
 
@@ -1132,17 +1141,17 @@ var Polygon = {
         polygon.getType = function () {
             return Type.POLYGON;
         };
-        polygon.toJson = function () {
-            var json = [];
+        polygon.asArray = function () {
+            var array = [];
             for (var i = 0; i < paths.length; i++) {
-                json[i] = paths[i].toJson();
+                array[i] = paths[i].asArray();
             }
-            return json;
+            return array;
         };
         polygon.toGeoJson = function () {
             return {
                 type: "Polygon",
-                coordinates: polygon.toJson()
+                coordinates: polygon.asArray()
             };
         };
         polygon.copy = function () {
@@ -1263,9 +1272,8 @@ var Polygon = {
                 });
         };
         polygon.computeBoundingBox = function (box) {
-            if (paths.length == 0) {
-                throw 'empty polygon has no bounding box';
-            }
+            box = box || Box.empty();
+            if (paths.length == 0) throw 'empty polygon has no bounding box';
             var firstPoint = paths[0].getLines()[0].getStart();
             box.set(firstPoint, firstPoint);
             for (var i = 0; i < paths.length; i++) {
@@ -1283,16 +1291,16 @@ var Polygon = {
 
         return polygon;
     },
-    fromJson: function (json) {
+    fromArray: function (array) {
         var polygon = Polygon.create();
-        for (var i = 0; i < json.length; i++) {
-            var path = Path.fromJson(json[i]);
+        for (var i = 0; i < array.length; i++) {
+            var path = Path.fromArray(array[i]);
             polygon.addPath(path.close());
         }
         return polygon;
     },
     fromGeoJson: function (json) {
-        return Polygon.fromJson(json.coordinates);
+        return Polygon.fromArray(json.coordinates);
     }
 };
 
@@ -1336,4 +1344,34 @@ module.exports = {
     Line: Line,
     Path: Path,
     Polygon: Polygon
+};
+
+
+var RADIANS_PER_DEGREE = Math.PI / 180;
+var EARTH_RADIUS = 6378137; //meters
+var CIRCUMFERENCE_AT_EQUATOR = 2 * Math.PI * EARTH_RADIUS;
+
+var meterPerDegree = function (referenceDegree) {
+    var referenceRadians = referenceDegree * RADIANS_PER_DEGREE;
+    var circumferenceAtReference = Math.cos(referenceRadians) * CIRCUMFERENCE_AT_EQUATOR;
+    return circumferenceAtReference / 360;
+};
+
+var degreesPerMeter = function (referenceDegree) {
+    var referenceRadians = referenceDegree * RADIANS_PER_DEGREE;
+    var circumferenceAtReference = Math.cos(referenceRadians) * CIRCUMFERENCE_AT_EQUATOR;
+    return 360 / circumferenceAtReference;
+};
+
+var distanceInMeter = function (latA, lonA, latB, lonB) {
+    var referenceLat = (latA + latB) / 2;
+    var referenceLon = (lonA + lonB) / 2;
+    var deltaLat = meterPerDegree(referenceLon) * (latA - latB);
+    var deltaLon = meterPerDegree(referenceLat) * (lonA - lonB);
+    return Math.sqrt(deltaLat * deltaLat + deltaLon * deltaLon);
+}
+
+var shiftLocationEastByMeters = function (location, meters) {
+    var delta = degreesPerMeter(location.getY()) * meters;
+    return location.translate(delta, 0);
 };

@@ -28,7 +28,8 @@ exports.fuzzy = {
     type: 'string',
     analyzer: 'fuzzy'
 };
-exports.geo = primitive('geo_shape');
+exports.geoShape = primitive('geo_shape');
+exports.geoPoint = primitive('geo_point');
 exports.string = primitive('string');
 exports.integer = primitive('integer');
 exports.long = primitive('long');
@@ -40,6 +41,7 @@ exports.reference = {
     index: 'not_analyzed'
 };
 exports.nested = function (properties, disabled) {
+    properties = properties || {};
     var result = {
         type: 'nested',
         properties: properties
@@ -81,8 +83,10 @@ exports.toWire = function (atom) {
 
 exports.fromWire = function (body, typeId) {
     var type = getType(typeId || body.typeId);
+    delete body.typeId;
     var atom = type.read(body);
     atom.id = body.id;
+    atom.type = type;
     return atom;
 };
 

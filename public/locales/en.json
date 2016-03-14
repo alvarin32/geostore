@@ -1,6 +1,21 @@
 {
-	"helloWorld": "hello world",
-	"home": {
-		"hello": "Hello!"
-	}
+  "token": {
+    "email": {
+      "subject": "new session",
+      "bodyPlain": "The secret to start your new session is %secret%\n\n%link%",
+      "bodyHtml": "The secret to start your new session is %secret%<br><br>%link%"
+    },
+    "create": "Please enter your email-address to start a new session.",
+    "secret": "We sent you a secret to start the session. Please check your mailbox and enter it here."
+  },
+  "main":{
+    "scenarios": "Scenarios",
+    "restore": "Restore/Initialize",
+    "backup": "Backup"
+  },
+  "backup":{
+    "wait": "The server is backing up the database...",
+    "error": "An error occured:",
+    "ready": "The backup is ready and can be downloaded here:"
+  }
 }

@@ -100,10 +100,10 @@ var rgb = function (red, green, blue, alpha) {
         a: alpha,
         toString: function () {
             return 'rgba('
-                + red + ', '
-                + green + ', '
-                + blue + ', '
-                + alpha + ')';
+                + color.r + ', '
+                + color.g + ', '
+                + color.b + ', '
+                + color.a + ')';
         }
     };
     return color;
@@ -132,9 +132,15 @@ var parseRgb = function (value) {
 };
 
 var extractNumbers = function (value) {
-    return value.replace(/[^0-9\-\+eE,\.]/g, ' ').split(' ').map(function (v) {
-        return parseFloat(v);
-    });
+    return value
+        .replace(/[^0-9\-\+eE\.]/g, ' ')
+        .split(' ')
+        .filter(function (v) {
+            return v;
+        })
+        .map(function (v) {
+            return parseFloat(v);
+        });
 }
 
 

@@ -12,6 +12,7 @@ var newQuery = function () {
 
     query.type = function (_type) {
         type = _type;
+        if (!definition) return query.all();
         return query;
     };
 
@@ -24,6 +25,10 @@ var newQuery = function () {
         return query.define({
             filtered: {filter: filter}
         });
+    };
+
+    query.all = function () {
+        return query.define({match_all: {}});
     };
 
     query.compile = function (index) {
@@ -49,5 +54,8 @@ module.exports = {
     },
     filtered: function (filter) {
         return (newQuery()).filtered(filter);
+    },
+    all: function () {
+        return (newQuery()).all();
     }
 };

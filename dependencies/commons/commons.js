@@ -267,6 +267,40 @@ var LinkedList = function () {
 };
 
 
+var MultiMap = function () {
+    var map = {};
+    return {
+        put: function (id, element) {
+            var list = map[id];
+            if (!list) {
+                list = [];
+                map[id] = list;
+            }
+            list.push(element);
+        },
+        forEach: function (id, handle) {
+            if (arguments.length==2) {
+                var list = map[id];
+                return list && list.forEach(handle);
+            }
+            for (id in map) {
+                map[id].forEach(handle);
+            }
+        },
+        remove: function (id, element) {
+            var list = map[id];
+            if (element) {
+                removeElement(list, element);
+                if (!list.length) delete map[id];
+            } else {
+                delete map[id];
+                return list || [];
+            }
+        }
+    };
+};
+
+
 var equals = function (a, b) {
     if (a === b) return true;
     if (isArray(a)) {
@@ -311,10 +345,6 @@ var clone = function (value) {
     return value;
 };
 
-
-//see http://css-tricks.com/test-support-svg-img/
-var document = document || false;
-var clientSupportsSvgAsImg = document && document.implementation.hasFeature("http://www.w3.org/TR/SVG11/feature#Image", "1.1");
 
 var startsWith = function (string, prefix) {
     return string.length >= prefix.length
@@ -383,6 +413,14 @@ var createRandomId = function (length) {
     return id;
 };
 
+var run = function (code) {
+    code();
+};
+
+var runAll = function (array) {
+    array.forEach(run);
+};
+
 
 var createFuture = function () {
 
@@ -432,6 +470,30 @@ var createFuture = function () {
     return future;
 }
 
+
+var delayedCode = function (code) {
+
+    var isRunning = false;
+    var runAgain = false;
+
+    var onDone = function () {
+        isRunning = false;
+        if (runAgain) {
+            runAgain = false;
+            run();
+        }
+    };
+
+    var run = function () {
+        if (isRunning) return (runAgain = true);
+        isRunning = true;
+        code(onDone);
+    };
+
+    return run;
+
+};
+
 module.exports = {
     future: createFuture,
     contains: contains,
@@ -449,10 +511,12 @@ module.exports = {
     startsWith: startsWith,
     LruCache: LruCache,
     LinkedList: LinkedList,
+    MultiMap: MultiMap,
     Stack: Stack,
-    clientSupportsSvgAsImg: clientSupportsSvgAsImg,
     extend: extend,
     toHarmlessString: toHarmlessString,
     getRootFolder: getRootFolder,
-    randomId: createRandomId
+    randomId: createRandomId,
+    runAll: runAll,
+    delayedCode: delayedCode
 };

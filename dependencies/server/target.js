@@ -1,8 +1,7 @@
-module.exports = function (app) {
-    app.use(function (request, response, next) {
-        var url = request.url;
-        var parsed = parse(url);
-        request.target = createTarget(parsed.parts, parsed.parameters);
+exports.handler = function (request, response, next) {
+    var url = request.url;
+    parse(url, function (parts, parameters) {
+        request.target = createTarget(parts, parameters);
         next();
     });
 };
@@ -19,8 +18,7 @@ var createTarget = function (parts, parameters) {
         return true;
     };
     target.is = function () {
-        return target.startsWith.apply(this, arguments) &&
-            parts.length == arguments.length;
+        return parts.length == arguments.length && target.startsWith.apply(this, arguments);
     };
     target.getParameter = function (key) {
         return parameters[key];
@@ -39,10 +37,11 @@ var createTarget = function (parts, parameters) {
     target.size = function () {
         return parts.length;
     };
+    target.url = '/' + parts.join('/');
     return target;
 };
 
-var parse = function (url) {
+var parse = function (url, onDone) {
     var indexOfQuestionMark = url.indexOf('?');
     var parts, parameters;
     if (indexOfQuestionMark >= 0) {
@@ -53,7 +52,7 @@ var parse = function (url) {
         parameters = {};
     }
     while (parts.length && parts[0] === '') parts.shift();
-    return {parts: parts, parameters: parameters};
+    onDone(parts, parameters);
 };
 
 var parseParameters = function (string) {
@@ -62,9 +61,8 @@ var parseParameters = function (string) {
     for (var i = 0; i < split.length; i++) {
         var keyAndValue = split[i].split('=');
         var key = decodeURIComponent(keyAndValue[0]);
-        parameters[key] = keyAndValue[1]
-            ? decodeURIComponent(keyAndValue[1])
-            : true;
+        var value = keyAndValue[1];
+        parameters[key] = value ? decodeURIComponent(value) : true;
     }
     return parameters;
 };
