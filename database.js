@@ -1,18 +1,7 @@
 var Elastic = require('elastic');
-var Schema = require('elastic/schema');
 var Query = require('elastic/query');
 var Through = require('through2');
-
-//TYPES:
-var Session = require('./schema/session');
-var Node = require('./schema/node');
-var Way = require('./schema/way');
-var Relation = require('./schema/relation');
-
-Schema.defineType(Session.type);
-Schema.defineType(Node.type);
-Schema.defineType(Way.type);
-Schema.defineType(Relation.type);
+var Schema = require('./schema/main');
 
 
 exports.start = function (name, onDone) {
@@ -52,8 +41,7 @@ exports.start = function (name, onDone) {
 
                 stream.write((new Date()).toUTCString() + '\n');
                 stream.write(total.toString() + '\n');
-                writeElements([Node.type, Way.type, Relation.type], onDone);
-
+                writeElements(Schema.getTypes(), onDone);
             });
         };
 

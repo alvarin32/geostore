@@ -19,7 +19,7 @@ module.exports = function (application, onDone) {
             ? F.node('span').style({color: colors.error, display: 'block'}).text(I18n.get(error))
             : F.node('a').style({color: colors.success, display: 'block'}).attr({href: route}).text(route);
 
-        var button = Gui.createButton(['backup', error ? 'errorButton' : 'successButton'])
+        var button = Gui.createButton(['commons', error ? 'buttonSad' : 'buttonHappy'])
             .style({marginTop: cm(0.5)}).on('click', container.hide.bind(null, onDone));
 
         progressBar.animate({opacity: 0}, {

@@ -6,7 +6,7 @@ var Restore = require('./restore');
 var Gui = require('client/gui');
 var I18n = require('client/i18n');
 var Observable = require('commons/observable');
-
+require('../schema/main');
 
 exports.start = function () {
 

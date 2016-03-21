@@ -163,6 +163,7 @@ module.exports = function (context) {
     };
 
     var fill = function (style, color, alpha) {
+        if (style.hideFill) return;
         color = color || style.fillColor || defaultStyle.fillColor;
         alpha = alpha || style.fillAlpha || defaultStyle.fillAlpha;
 

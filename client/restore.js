@@ -32,7 +32,7 @@ module.exports = function (application, onDone) {
         error = I18n.get(error);
         var container = Gui.createContainer();
         var message = F.node('div').style({color: colors.error, fontSize: cm(0.4)}).text(error);
-        var button = Gui.createButton(['restore', 'buttonError']);
+        var button = Gui.createButton(['commons', 'buttonSad']);
         button.on('click', container.hide.bind(null, onDone));
         container.append(message, button).show();
     };
@@ -41,7 +41,7 @@ module.exports = function (application, onDone) {
         var text = I18n.get(['restore', 'success']);
         var container = Gui.createContainer();
         var message = F.node('div').style({color: colors.success, fontSize: cm(0.4)}).text(text);
-        var button = Gui.createButton(['restore', 'buttonSuccess']);
+        var button = Gui.createButton(['commons', 'buttonHappy']);
         button.on('click', container.hide.bind(null, onDone));
         container.append(message, button).show();
     };

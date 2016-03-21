@@ -67,7 +67,7 @@ var startApps = function (application, onDone) {
     require('./server/token').start(application, configuration);
     require('./server/backup').start(application, configuration, global);
     require('./server/restore').start(application, configuration, global);
-    //TODO
+    require('./server/scenario').start(application, configuration, global);
     onDone();
 };
 

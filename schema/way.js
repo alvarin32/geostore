@@ -9,20 +9,20 @@ var type = {
     write: function (way) {
         var body = Schema.write(way);
         if (body.geometry) {
-            body.bounding = body.geometry.computeBoundingBox().toGeoJson();
+            body.bounds = body.geometry.computeBoundingBox().toGeoJson();
             body.geometry = body.geometry.toGeoJson();
         }
         return body;
     },
     read: function (body) {
         var way = Schema.read(body);
-        if (way.bounding) delete way.bounding;
+        if (way.bounds) delete way.bounds;
         if (way.geometry) way.geometry = GeoTools.fromGeoJson(way.geometry);
         return way;
     },
     schema: {
         name: Schema.fuzzy,
-        bounding: Schema.geoShape,
+        bounds: Schema.geoShape,
         geometry: Schema.nested({}, false),
         tags: Schema.nested(),
         nodeIds: Schema.reference

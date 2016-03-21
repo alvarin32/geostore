@@ -5,6 +5,7 @@ var Log = require('./log');
 var Osm = require('./osm');
 var Zlib = require('zlib');
 var GeoTools = require('geometry/tools');
+var OsmState = require('../schema/osm_state');
 
 
 var writeStream, id, route;
@@ -65,7 +66,10 @@ exports.start = function (application, configuration, global) {
                 client.call('defineExcerpt', bounds.toGeoJson(), function (error, excerpt) {
                     if (error) return Log.error(error) && onDone(['restore', 'couldNotDefineExcerpt']);
                     excerpt = GeoTools.fromGeoJson(excerpt);
-                    Osm.createParser(database, excerpt).parse(filePath, onProgress, onDone);
+                    database.put(OsmState.type.create(bounds), function (error) {
+                        if (error) return onDone(['restore', 'couldNotStoreExcerpt']);
+                        Osm.createParser(filePath, database, excerpt).parse(onProgress, onDone);
+                    });
                 });
             });
         };
@@ -77,16 +81,16 @@ exports.start = function (application, configuration, global) {
             database.readBackup(stream, onProgress, onDone);
         };
 
-        onProgress(0.033);
+        onProgress(0.1);
         database.reset(function (error) {
             if (error) return onDone(['restore', 'couldNotResetDatabase']);
-            onProgress(0.066);
+            onProgress(0.15);
             getFileType(filePath, function (error, mimeType) {
                 if (error) return onDone(['restore', 'couldNotDetectFileType']);
-                onProgress(0.1);
+                onProgress(0.2);
                 var _onProgress = onProgress;
                 onProgress = function (progress) {
-                    _onProgress(0.1 + 0.9 * progress);
+                    _onProgress(0.2 + 0.8 * progress);
                 };
 
                 if (mimeType == 'pbf') {

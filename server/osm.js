@@ -2,6 +2,7 @@ var OsmRead = require('osm-read');
 var Geo = require('geometry');
 var MapTools = require('map/tools');
 var Log = require('./log');
+var Fs = require('fs');
 
 var Node = require('../schema/node');
 var Way = require('../schema/way');
@@ -31,16 +32,21 @@ exports.parseBounds = function (filePath, onDone) {
     });
 };
 
-exports.createParser = function (database, boundingBox) {
+exports.createParser = function (filePath, database, boundingBox) {
 
-    var parse = function (filePath, onProgress, onDone) {
-        var tracker = createProgressTracker(boundingBox, onProgress);
-        parsePbf(filePath, tracker.scaled(0.5), function (error, elements) {
-            if (error) return onDone(['osm', 'couldNotParsePbf']);
-            writeInChunks(elements, tracker.scaled(0.5), function (error) {
-                if (error) return onDone(['osm', 'couldNotPersistOsmData']);
-                onProgress(1);
-                onDone();
+    var parse = function (onProgress, onDone) {
+        var tracker = createProgressTracker(onProgress).scaled(0.33);
+        markElements(tracker, function (error, markedElements, numberOfMarks) {
+            if (error) return onDone(['osm', 'couldNotMarkElements']);
+            tracker.actual(numberOfMarks);
+            parseElements(tracker, markedElements, function (error, elements) {
+                if (error) return onDone(['osm', 'couldNotParseElements']);
+                markedElements = null;
+                writeInChunks(elements, tracker, function (error) {
+                    if (error) return onDone(['osm', 'couldNotStoreElements']);
+                    onProgress(1);
+                    onDone();
+                });
             });
         });
     };
@@ -93,28 +99,65 @@ exports.createParser = function (database, boundingBox) {
         });
     };
 
-    var parsePbf = function (filePath, tracker, onDone) {
 
-        var outOfBounds = {};
-        var elements = {};
-        var elementCount = 0;
-        var addElement = function (element) {
-            elements[element.id] = element;
-            elementCount++;
+    var markElements = function (tracker, onDone) {
+        var marked = {};
+        var marksCount = 0;
+        var markElement = function (id) {
+            marked[id] = true;
+            marksCount++;
             tracker.update(1);
-            return element;
+        };
+        var isMarked = function (id) {
+            return id in marked;
+        };
+        var markIfNotMarked = function (id) {
+            if (id in marked) return;
+            markElement(id);
         };
 
-        var onNode = function ($node) {
-            if (boundingBox.contains($node.lon, $node.lat)) {
-                parseNode($node);
-            } else {
-                outOfBounds['node_' + $node.id] = $node;
+        var onNode = function (node) {
+            if (boundingBox.contains(node.lon, node.lat)) markElement('node_' + node.id);
+        };
+
+        var onWay = function (way) {
+            var nodeIds = way.nodeRefs.map(function (ref) {
+                return 'node_' + ref;
+            });
+            if (nodeIds.some(isMarked)) {
+                markElement('way_' + way.id);
+                nodeIds.forEach(markIfNotMarked)
             }
         };
 
-        var parseNode = function ($node) {
+        var onRelation = function (relation) {
+            var memberIds = relation.members.map(function (member) {
+                return member.type + '_' + member.ref;
+            });
+            if (memberIds.every(isMarked)) {
+                markElement('relation_' + relation.id);
+            }
+        };
+
+        OsmRead.parsePbf({
+            filePath: filePath,
+            node: onNode,
+            way: onWay,
+            relation: onRelation,
+            error: Log.error,
+            endDocument: function () {
+                onDone(undefined, marked, marksCount);
+            }
+        });
+    };
+
+    var parseElements = function (tracker, marked, onDone) {
+
+        var elements = {};
+
+        var onNode = function ($node) {
             var id = 'node_' + $node.id;
+            if (!(id in marked)) return;
             var location = [$node.lon, $node.lat];
             var node = Node.type.create(id, location);
             if ($node.tags) {
@@ -123,65 +166,42 @@ exports.createParser = function (database, boundingBox) {
                     node.name = nameFromTags(node.tags);
                 }
             }
-            return addElement(node);
+            elements[id] = node;
+            tracker.update(1);
         };
 
-        var onWayGeoReady = function ($way, geometry, nodeIds) {
+        var onWay = function ($way) {
             var id = 'way_' + $way.id;
-            var way = Way.type.create(id);
-            if ($way.tags) {
-                way.tags = cleanTags($way);
-                if (way.tags) {
-                    way.name = nameFromTags(way.tags);
+            if (!(id in marked)) return;
+            parseWay($way, function (nodeIds, geometry) {
+                var way = Way.type.create(id);
+                if ($way.tags) {
+                    way.tags = cleanTags($way);
+                    if (way.tags) {
+                        way.name = nameFromTags(way.tags);
+                    }
                 }
-            }
-            way.nodeIds = nodeIds;
-            way.geometry = geometry;
-            return addElement(way);
+                way.nodeIds = nodeIds;
+                way.geometry = geometry;
+                elements[id] = way;
+                tracker.update(1);
+            });
         };
 
-        var getFromOutOfBounds = function (elementId, parse) {
-            var element = outOfBounds[elementId];
-            if (element) {
-                delete outOfBounds[elementId];
-                return parse(element);
-            }
-            return elements[elementId];
-        };
-
-        var forceParseWay = function ($way) {
+        var parseWay = function ($way, onDone) {
             var nodeIds = [];
             var path = [];
-            $way.nodeRefs.forEach(function (nodeId) {
-                nodeId = 'node_' + nodeId;
+            $way.nodeRefs.forEach(function (ref) {
+                var nodeId = 'node_' + ref;
                 nodeIds.push(nodeId);
                 var node = elements[nodeId];
-                if (!node) node = getFromOutOfBounds(nodeId, parseNode);
-                path.push(node.location);
+                if (!node || !node.location) {
+                    console.log('could not find node ' + nodeId + ' of way ' + $way.id);
+                }
+                path.push(elements[nodeId].location);
             });
             var geometry = createWayGeo(path, nodeIds, $way.tags);
-            return onWayGeoReady($way, geometry, nodeIds);
-        };
-
-        var tryToParseWay = function ($way) {
-            var nodeIds = [];
-            var path = [];
-            var missing = [];
-            $way.nodeRefs.forEach(function (nodeId, index) {
-                nodeId = 'node_' + nodeId;
-                nodeIds.push(nodeId);
-                var node = elements[nodeId];
-                if (!node) return missing.push(index);
-                path[index] = node.location;
-            });
-            if (missing.length == nodeIds.length) return (outOfBounds['way_' + $way.id] = $way);
-            missing.forEach(function (index) {
-                var nodeId = nodeIds[index];
-                var node = getFromOutOfBounds(nodeId, parseNode);
-                path[index] = node.location;
-            });
-            var geometry = createWayGeo(path, nodeIds, $way.tags);
-            onWayGeoReady($way, geometry, nodeIds);
+            onDone(nodeIds, geometry);
         };
 
         var createWayGeo = function (pathArray, nodeIds, tags) {
@@ -197,8 +217,9 @@ exports.createParser = function (database, boundingBox) {
                 && (!tags || !tags.highway);
         };
 
-        var onRelationMembersReady = function ($relation) {
+        var onRelation = function ($relation) {
             var id = 'relation_' + $relation.id;
+            if (!(id in marked)) return;
             var relation = Relation.type.create(id);
             if ($relation.tags) {
                 relation.tags = cleanTags($relation);
@@ -207,51 +228,23 @@ exports.createParser = function (database, boundingBox) {
                 }
             }
             relation.members = $relation.members;
-            return addElement(relation);
+            elements[id] = relation;
+            tracker.update(1);
         };
-
-        var tryToparseRelation = function ($relation) {
-            var hasActiveMember = $relation.members.some(function (member) {
-                var id = member.type + '_' + member.ref;
-                return (id in elements);
-            });
-
-            if (hasActiveMember) return forceParseRelation($relation);
-            (outOfBounds['relation_' + $relation.id] = $relation);
-        };
-
-        var forceParseRelation = function ($relation) {
-            $relation.members.forEach(function (member) {
-                var type = member.type;
-                var id = type + '_' + member.ref;
-                var element = elements[id];
-                if (element) return;
-                var parseFunction = getParseFunction(type);
-                getFromOutOfBounds(id, parseFunction);
-            });
-            return onRelationMembersReady($relation);
-        };
-
-        var getParseFunction = function (type) {
-            if (type == 'node') return parseNode;
-            if (type == 'way') return forceParseWay;
-            return forceParseRelation;
-        };
-
 
         OsmRead.parsePbf({
             filePath: filePath,
             node: onNode,
-            way: tryToParseWay,
-            relation: tryToparseRelation,
+            way: onWay,
+            relation: onRelation,
             error: Log.error,
             endDocument: function () {
-                tracker.actual(elementCount);
                 onDone(undefined, elements);
             }
         });
 
     };
+
 
     return {parse: parse};
 };

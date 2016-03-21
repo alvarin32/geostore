@@ -19,8 +19,6 @@
   "backup": {
     "wait": "Backup wird erstellt...",
     "error": "Es ist ein Fehler aufgetreten:",
-    "successButton": "Super! Danke.",
-    "errorButton": "Schade.",
     "ready": "Das Backup kann hier geladen werden:",
     "couldNotDumpDatabase": "Die Datenbank konnte das Backup nicht erstellen.",
     "downloadCouldNotBeInstantiated": "Der Download konnte nicht zur Verfügung gestellt werden."
@@ -32,10 +30,16 @@
     "couldNotPrepareUpload": "Der Upload konnte nicht vorbereitet werden.",
     "couldNotDropContent": "Die Datenbank konnte nicht geleert werden.",
     "couldNotRestore": "Die Datenbank konnte nicht zurückgesetzt werden.",
-    "buttonError": "Schade.",
-    "buttonSuccess": "Super! Danke.",
     "success": "Das Backup wurde erfolgreich eingespielt.",
     "dropZone": "Lege Die Backup-Datei hier ab, oder klicke, um einen entsprechenden Dialog zu öffnen",
     "couldNotDetectFileType": "Der Dateityp konnte nicht festgestellt werden."
+  },
+  "commons": {
+    "buttonSad": "Schade.",
+    "buttonHappy": "Super, Danke!"
+  },
+  "scenario": {
+    "noName": " - kein Name - ",
+    "description": "Erstellt am %date% von %creator%"
   }
 }
