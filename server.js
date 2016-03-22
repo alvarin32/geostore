@@ -65,6 +65,7 @@ var startApps = function (application, onDone) {
     var global = {};
     require('./server/i18n').start(application);
     require('./server/token').start(application, configuration);
+    require('./server/osm').start(application);
     require('./server/backup').start(application, configuration, global);
     require('./server/restore').start(application, configuration, global);
     require('./server/scenario').start(application, configuration, global);

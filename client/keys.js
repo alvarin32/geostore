@@ -2,7 +2,8 @@ var F = require('client/fiat');
 var Commons = require('commons');
 
 var keyListeners = [];
-var listenForKeys = function (listener) {
+
+exports.listen = function(listener){
     keyListeners.unshift(listener);
     var listening = true;
     var handle = {
@@ -24,6 +25,7 @@ var listenForKeys = function (listener) {
     return handle;
 };
 
+
 var shouldBePropagated = function (keyEvent) {
     var target = keyEvent.srcElement || keyEvent.target;
     return !F.wrap(target).noKeys;
@@ -42,8 +44,3 @@ F.onReady(function () {
         }
     });
 });
-
-
-module.exports = {
-    listenForKeys: listenForKeys
-};

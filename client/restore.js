@@ -3,7 +3,7 @@ var F = require('client/fiat');
 var I18n = require('client/i18n');
 var Observable = require('commons/observable');
 var Ajax = require('client/ajax');
-var Input = require('./input');
+var Keys = require('./keys');
 
 var GeoTools = require('geometry/tools');
 var Geo = require('geometry');
@@ -285,7 +285,7 @@ var askForExcerpt = function (bounds, onDone) {
             });
         });
 
-        var listener = Input.listenForKeys(function (keyEvent) {
+        var listener = Keys.listen(function (keyEvent) {
             if (keyEvent.keyCode == 27) {
                 cancelBox();
                 listener.stop();

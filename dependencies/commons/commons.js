@@ -279,10 +279,11 @@ var MultiMap = function () {
             list.push(element);
         },
         forEach: function (id, handle) {
-            if (arguments.length==2) {
+            if (arguments.length == 2) {
                 var list = map[id];
                 return list && list.forEach(handle);
             }
+            handle = id;
             for (id in map) {
                 map[id].forEach(handle);
             }
@@ -494,6 +495,15 @@ var delayedCode = function (code) {
 
 };
 
+var sequence = function () {
+    var methods = arguments;
+    return function () {
+        for (var i = 0; i < methods.length; i++) {
+            methods[i].apply(this, arguments);
+        }
+    };
+};
+
 module.exports = {
     future: createFuture,
     contains: contains,
@@ -518,5 +528,6 @@ module.exports = {
     getRootFolder: getRootFolder,
     randomId: createRandomId,
     runAll: runAll,
-    delayedCode: delayedCode
+    delayedCode: delayedCode,
+    sequence: sequence
 };

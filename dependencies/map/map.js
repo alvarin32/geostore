@@ -122,7 +122,7 @@ var create = function () {
             }
         };
         if (glideAnimation != null) glideAnimation.cancel();
-        glideAnimation = Animator.start(animated);
+        glideAnimation = Animator.tween(animated);
     };
 
     map.goTo = function (targetZoom, targetCenter, glide) {

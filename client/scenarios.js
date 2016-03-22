@@ -5,14 +5,14 @@ var Main = require('./scenario/main');
 var Schema = require('elastic/schema');
 var Tiles = require('map/tiles');
 
-module.exports = function (application, onDone) {
+module.exports = function (application, onStop) {
 
     var showError = function (error) {
         var container = Gui.createContainer();
         var label = F.node('div').style({color: colors.error}).text(I18n.get(error));
         var button = Gui.createButton(['commons', 'buttonSad']);
         container.append(label, button).show();
-        button.on('click', container.hide.bind(container, onDone));
+        button.on('click', container.hide.bind(container, onStop));
     };
 
     var waitingIcon = Gui.createWaitingIcon({delay: 300}).style({
@@ -21,22 +21,27 @@ module.exports = function (application, onDone) {
         margin: 'auto'
     });
     F.body.append(waitingIcon);
-    application.ether.call('scenarios/list', function (error, answer) {
+    application.ether.call('scenarios/list', function (error, scenarios) {
         waitingIcon.stop(function () {
             waitingIcon.remove();
             if (error) return showError(error);
-            var osmState = Schema.fromWire(answer.osmState);
-            osmState.bounds.hidden = true;
-            answer.scenarios.forEach(function (scenario) {
-                var button = renderScenarioButton(scenario, osmState.bounds);
+            scenarios.sort(compareScenarios).forEach(function (scenario) {
+                scenario = Schema.fromWire(scenario);
+                var button = renderScenarioButton(scenario);
                 F.body.append(button);
             });
             F.body.append(renderCreateButton());
         });
     });
 
+    var compareScenarios = function (a, b) {
+        return b.created - a.created;
+    };
 
-    var renderScenarioButton = function (scenario, defaultBounds) {
+
+    var renderScenarioButton = function (scenario) {
+        var bounds = scenario.bounds || application.state.bounds;
+        bounds.hidden = true;
         var container = F.node('div').style({width: '100%', cursor: 'pointer', margin: cm(0.5)});
         var icon = Gui.createGeoIcon({provider: Tiles.providers.GOOGLE})
             .style({
@@ -46,7 +51,7 @@ module.exports = function (application, onDone) {
                 verticalAlign: 'middle',
                 margin: cm(0.25)
             })
-            .update(scenario.bounds || defaultBounds);
+            .update(bounds);
 
         var descriptionText = I18n.get(['scenario', 'description'])
             .replace('%date%', (new Date(scenario.created)).toLocaleDateString())
@@ -98,7 +103,7 @@ module.exports = function (application, onDone) {
 
     var start = function (scenario) {
         F.body.clear();
-        Main.start(scenario, onDone);
+        Main.start(application, scenario, onStop);
     };
 
     var create = function () {
@@ -108,7 +113,8 @@ module.exports = function (application, onDone) {
             waitingIcon.stop(function () {
                 waitingIcon.remove();
                 if (error) return showError(error);
-                start(Schema.fromWire(scenario));
+                scenario = Schema.fromWire(scenario);
+                start(scenario);
             });
         });
     };

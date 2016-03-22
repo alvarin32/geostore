@@ -6,19 +6,32 @@ var Restore = require('./restore');
 var Gui = require('client/gui');
 var I18n = require('client/i18n');
 var Observable = require('commons/observable');
-require('../schema/main');
+var Schema = require('../schema/main');
 
 exports.start = function () {
 
     var application = Observable.create();
     application.ether = Ether();
+    application.ether.call('main/state', function (error, state) {
+        if (error) return showError(error);
+        application.state = Schema.fromWire(state);
 
-    var menu = createMenu();
-    menu.add('/images/scenarios.svg', ['main', 'scenarios'], Scenarios.bind(this, application));
-    menu.add('/images/backup.svg', ['main', 'backup'], Backup.bind(this, application));
-    menu.add('/images/restore.svg', ['main', 'restore'], Restore.bind(this, application));
+        var menu = createMenu();
+        menu.add('/images/scenarios.svg', ['main', 'scenarios'], Scenarios.bind(this, application));
+        menu.add('/images/backup.svg', ['main', 'backup'], Backup.bind(this, application));
+        menu.add('/images/restore.svg', ['main', 'restore'], Restore.bind(this, application));
 
-    menu.show();
+        menu.show();
+    });
+};
+
+var showError = function (error) {
+    var text = I18n.get(error);
+    F.node('div').style({
+        position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, margin: 'auto',
+        height: cm(3), width: '100%', textAlign: 'center',
+        color: colors.error
+    }).text(text).appendTo(F.body);
 };
 
 var createMenu = function () {

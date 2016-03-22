@@ -2,11 +2,22 @@ var OsmRead = require('osm-read');
 var Geo = require('geometry');
 var MapTools = require('map/tools');
 var Log = require('./log');
-var Fs = require('fs');
+var Query = require('elastic/query');
+var Schema = require('elastic/schema');
+var OsmState = require('../schema/osm_state');
 
 var Node = require('../schema/node');
 var Way = require('../schema/way');
 var Relation = require('../schema/relation');
+
+exports.start = function (application) {
+    application.ether.onCall('main/state', function (parameter, client, onDone) {
+        application.database.search(Query.type(OsmState.type), function (error, result) {
+            if (error || !result.hits.length) return onDone(['scenarios', 'couldNotReadOsmStatus']);
+            onDone(undefined, Schema.toWire(result.hits[0]));
+        });
+    });
+};
 
 exports.parseBounds = function (filePath, onDone) {
     var maxLat = Number.MIN_VALUE;

@@ -140,11 +140,7 @@ var providers = {
     GOOGLE: {
         tileSize: 256,
         getUrl: function (x, y, z) {
-            var serverIndex = Math.round(Math.random() * 2 + 1);
-            var layerId = 'm@169000000';
-            var locale = 'de';
-            return 'http://mt' + serverIndex + '.google.com/vt/lyrs='
-                + layerId + '&hl=' + locale + '&x=' + x + '&y=' + y + '&z=' + z + '&s=Galileo';
+            return 'https://www.google.com/maps/vt/pb=!1m4!1m3!1i' + z + '!2i' + x + '!3i' + y + '!2m3!1e0!2sm!3i258145710';
         },
         min: 1,
         max: 20
@@ -351,10 +347,13 @@ var createImage = function (options) {
     var width, height, tileContext, geoContext;
     var artist;
 
-    container.setGeo = function (geometry, transformed) {
-        geometry = geometry || Geo.Box.create(Geo.Point.create(-180, 90), Geo.Point.create(180, -90));
-        if (!transformed) geometry = geometry.copy().transform(MapTools.mercator);
-        geo = geometry;
+
+    var defaultGeo = Geo.Box.create(Geo.Point.create(-100, 40), Geo.Point.create(100, -40));
+    defaultGeo.hidden = true;
+    container.setGeo = function (geometry) {
+        geo = geometry || defaultGeo;
+        if (!geo.isMercator) geo = geo.copy().transform(MapTools.mercator);
+        geo.hidden = (geometry || defaultGeo).hidden;
         if (artist) render();
     };
 
@@ -372,7 +371,7 @@ var createImage = function (options) {
         excerpt.y = box.getTop() - ((excerpt.height - box.getHeight()) / 2);
         boundExcerpt(excerpt);
         renderTiles(excerpt);
-        renderGeo(excerpt);
+        if (!geo.hidden) renderGeo(excerpt);
     };
 
     var boundExcerpt = function (excerpt) {

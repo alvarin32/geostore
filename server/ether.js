@@ -50,7 +50,7 @@ module.exports = function (application, configuration) {
                 onNotification(endpointId, parameter);
             });
             var endpoint = endpoints.notifications[endpointId];
-            if (!endpoint) return Log.error('invalid endpoint: ' + endpoint);
+            if (!endpoint) return Log.error('invalid endpoint: ' + endpointId);
             endpoint(parameter, client);
         };
 
@@ -94,6 +94,7 @@ module.exports = function (application, configuration) {
 
     ether.forEachWithUser = userMap.forEach;
     ether.forEachWithSession = sessionMap.forEach;
+    ether.forEach = userMap.forEach;
 
     SocketServer().attach(application.secureServer).on('connection', onConnection);
 

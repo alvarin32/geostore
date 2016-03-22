@@ -73,6 +73,7 @@ var wrap = function (element) {
     };
     node.onAttached = function (handler, prepend) {
         if (handler != undefined) {
+            if (node.attached) return handler();
             prepend
                 ? node.attachHandlers.unshift(handler)
                 : node.attachHandlers.push(handler);

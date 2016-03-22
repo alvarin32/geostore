@@ -44,16 +44,11 @@ exports.createIcon = function (src, options) {
     return container.append(circle, image);
 };
 
-exports.createGeoIcon = function (size, options) {
+exports.createGeoIcon = function (options) {
 
     options = options || {};
+    var size = options.size || 2;
     options.offset = options.offset || size * 0.3;
-    options.artist = options.artist || {
-            strong: size * 4,
-            light: size * 1.5,
-            dotSize: size * 10,
-            dark: options.color || colors.dark
-        };
 
     var container = F.node('div').style({
         borderRadius: '50%',
@@ -71,7 +66,7 @@ exports.createGeoIcon = function (size, options) {
         options.hideGeo = (geo == undefined) || hide;
         image.style('opacity', geo ? 1 : 0.6);
         container.style('border', geo ? 'none' : cm(size * 0.03) + ' dashed ' + colors.dark);
-        image.update(geo);
+        image.setGeo(geo);
         return container;
     };
 
