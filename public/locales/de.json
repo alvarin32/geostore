@@ -41,5 +41,8 @@
   "scenario": {
     "noName": " - kein Name - ",
     "description": "Erstellt am %date% von %creator%"
+  },
+  "input": {
+    "dropZone": "Lege die Datei hier ab, oder klicke um einen entsprechenden Dialog zu öffnen"
   }
 }

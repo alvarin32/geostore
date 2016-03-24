@@ -3,7 +3,7 @@ var Commons = require('commons');
 
 var keyListeners = [];
 
-exports.listen = function(listener){
+exports.listen = function (listener) {
     keyListeners.unshift(listener);
     var listening = true;
     var handle = {
@@ -23,6 +23,26 @@ exports.listen = function(listener){
         }
     };
     return handle;
+};
+
+exports.on = function (keyCode, handler) {
+    return exports.listen(function (event) {
+        if (event.keyCode == keyCode) {
+            handler();
+            return false;
+        }
+    });
+};
+
+exports.once = function (keyCode, handler) {
+    var listener = exports.listen(function (event) {
+        if (event.keyCode == keyCode) {
+            listener.stop();
+            handler();
+            return false;
+        }
+    });
+    return listener;
 };
 
 

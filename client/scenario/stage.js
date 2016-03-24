@@ -1,6 +1,8 @@
 var F = require('client/fiat');
 var Map = require('map');
 var Tiles = require('map/tiles');
+var Constructor = require('map/constructor');
+var Geometries = require('map/geometries');
 
 module.exports = function () {
 
@@ -140,6 +142,8 @@ module.exports = function () {
     var createMap = function () {
         var map = Map.create();
         map.tiles = Tiles.layer(map, Tiles.providers.MAPQUEST);
+        map.geos = Geometries.layer(map);
+        map.constructor = Constructor.layer(map);
         map.container.style({position: 'fixed', left: 0, top: 0, width: '100%', height: '100%', opacity: 0});
 
         var animation;
@@ -155,20 +159,30 @@ module.exports = function () {
     };
 
     var createMenu = function (zIndex) {
-        var size = 5;
+        var size = barSize;
         var menu = F.node('div').style({
-            position: 'fixed', left: cm(-size),
+            position: 'fixed', left: cm(-size * 1.2),
             top: 0, height: '100%', width: cm(size),
-            zIndex: zIndex, backgroundColor: colors.darker, color: colors.bright
+            zIndex: zIndex, backgroundColor: colors.darker, color: colors.bright,
+            textAlign: 'center', paddingTop: cm(barSize * 1.5)
         });
-        var animation;
+        var animation, hidden = true;
         menu.show = function (onComplete) {
+            hidden = false;
             if (animation) animation.cancel();
             animation = menu.animate({left: 0}, {onComplete: onComplete});
+            return false;
         };
         menu.hide = function (onComplete) {
+            hidden = true;
             if (animation) animation.cancel();
-            animation = menu.animate({left: cm(-size)}, {onComplete: onComplete});
+            animation = menu.animate({left: cm(-size * 1.2)}, {onComplete: onComplete});
+            return false;
+        };
+        menu.toggle = function () {
+            hidden = !hidden;
+            hidden ? menu.hide() : menu.show();
+            return false;
         };
         return menu;
     };

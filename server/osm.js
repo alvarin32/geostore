@@ -260,6 +260,22 @@ exports.createParser = function (filePath, database, boundingBox) {
     return {parse: parse};
 };
 
+exports.highways = {
+    motorway: {speed: 100, capacity: 10},
+    motorway_link: {speed: 50, capacity: 10},
+    trunk: {speed: 100, capacity: 10},
+    trunk_link: {speed: 50, capacity: 10},
+    primary: {speed: 80, capacity: 9},
+    primary_link: {speed: 50, capacity: 9},
+    secondary: {speed: 80, capacity: 8},
+    secondary_link: {speed: 50, capacity: 8},
+    tertiary: {speed: 80, capacity: 7},
+    tertiary_link: {speed: 50, capacity: 7},
+    unclassified: {speed: 70, capacity: 6},
+    residential: {speed: 30, capacity: 5},
+    living_street: {speed: 10, capacity: 4}
+};
+
 var cleanTags = function (element) {
     var old = element.tags;
     var result = {};

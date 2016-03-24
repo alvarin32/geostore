@@ -37,6 +37,9 @@ var configuration = {
     },
     restore: {
         folder: Path.join(rootFolder, 'uploads')
+    },
+    scenarios: {
+        folder: Path.join(rootFolder, 'scenarios')
     }
 };
 

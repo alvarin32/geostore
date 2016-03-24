@@ -2,6 +2,7 @@ var F = require('client/fiat');
 var Gui = require('client/gui');
 var Keys = require('../keys');
 var Observable = require('commons/observable');
+var I18n = require('client/i18n');
 
 module.exports = function (stage) {
 
@@ -21,6 +22,27 @@ module.exports = function (stage) {
         var question = askFor(input);
         question.on('confirmed', function () {
             options.onConfirmed(input.value());
+        });
+    };
+
+    _.askForFile = function (options) {
+        var widget = F.node('div').style({width: '70%', height: cm(3)});
+        var dropZone = createDropZone().appendTo(widget);
+        var uploadStatus = Observable.create();
+        dropZone.on('files', function (files) {
+            var file = files[0];
+            doUpload(file, options.ether, uploadStatus);
+        });
+
+
+        var onFileUploaded = function (uploadId) {
+
+        };
+
+
+        var question = askFor(widget);
+        question.on('confirmed', function () {
+            //TODO
         });
     };
 
@@ -69,4 +91,68 @@ module.exports = function (stage) {
 
 
     return _;
+};
+
+
+var createDropZone = function () {
+
+    var dropZone = F.node('div')
+        .style({
+            border: colors.dark + ' dashed ' + cm(0.05),
+            width: '100%', height: '100%',
+            position: 'relative', cursor: 'pointer'
+        });
+
+    var fill = {width: '100%', height: '100%', position: 'absolute', left: 0, top: 0, cursor: 'pointer'};
+
+    var form = F.node('form')
+        .attr({method: 'post', enctype: 'multipart/form-data'})
+        .style(fill);
+    var fileInput = F.node('input')
+        .attr({type: 'file', id: 'DzInput', multiple: false})
+        .style(fill)
+        .style({visibility: 'hidden'});
+    var label = F.node('label')
+        .attr('for', 'DzInput')
+        .style(fill);
+
+    var message = F.node('div')
+        .style({
+            padding: cm(0.25),
+            height: cm(2), lineHeight: cm(0.3), fontSize: cm(0.3), color: colors.between,
+            left: 0, top: 0, right: 0, bottom: 0, margin: 'auto', position: 'absolute'
+        })
+        .text(I18n.get(['input', 'dropZone']));
+
+    dropZone.append(message, form.append(fileInput, label));
+
+    var notify = function (fileList) {
+        var fileArray = [];
+        for (var i = 0; i < fileList.length; i++) fileArray.push(fileList[i]);
+        dropZone.emit('files', fileArray);
+    };
+
+    fileInput.on('change', function () {
+        var files = fileInput.raw().files;
+        notify(files);
+        return false;
+    });
+
+    dropZone.on('drop', function () {
+        var files = event['dataTransfer']['files'];
+        notify(files);
+        return false;
+    });
+
+    dropZone.on('dragover', function (event) {
+        event['dataTransfer']['dropEffect'] = 'copy';
+        return false;
+    });
+
+    dropZone.hide = function (onDone) {
+        message.remove();
+        dropZone.animate({opacity: 0}, {onDone: onDone});
+    };
+
+    return Observable.wrap(dropZone);
 };
